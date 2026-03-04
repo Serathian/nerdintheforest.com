@@ -2,10 +2,12 @@ import type {
   NitfPost,
   NitfPostGeo,
   NitfLocation,
+  NitfTrail,
   NitfWaypoint,
   NearbyPost,
   PaginatedResponse,
   PostType,
+  Tag,
 } from '@/types'
 
 const CMS_URL =
@@ -114,6 +116,53 @@ export async function fetchTrailWaypoints(trailId: number): Promise<NitfWaypoint
   }
   const data = await get<PaginatedResponse<NitfWaypoint>>(
     cmsUrl('/nitf_waypoints', qs),
+    3600,
+  )
+  return data.docs
+}
+
+// ─── Trails ───────────────────────────────────────────────────
+
+export async function fetchTrail(id: number): Promise<NitfTrail | null> {
+  try {
+    return await get<NitfTrail>(cmsUrl(`/nitf_trails/${id}`), 3600)
+  } catch {
+    return null
+  }
+}
+
+export async function fetchAllTrailIds(): Promise<number[]> {
+  const qs: Record<string, string> = {
+    'where[status][equals]': 'published',
+    limit: '1000',
+    depth: '0',
+    'select[id]': 'true',
+  }
+  const data = await get<PaginatedResponse<{ id: number }>>(
+    cmsUrl('/nitf_trails', qs),
+    3600,
+  )
+  return data.docs.map((d) => d.id)
+}
+
+// ─── Tags ─────────────────────────────────────────────────────
+
+export async function fetchAllTags(): Promise<Tag[]> {
+  const qs: Record<string, string> = { limit: '200', depth: '0' }
+  const data = await get<PaginatedResponse<Tag>>(cmsUrl('/tags', qs), 3600)
+  return data.docs
+}
+
+export async function fetchPostsByTag(tagSlug: string): Promise<NitfPostGeo[]> {
+  const qs: Record<string, string> = {
+    'where[status][equals]': 'published',
+    'where[tags.slug][equals]': tagSlug,
+    depth: '1',
+    limit: '200',
+    sort: '-published_at',
+  }
+  const data = await get<PaginatedResponse<NitfPostGeo>>(
+    cmsUrl('/nitf_posts', qs),
     3600,
   )
   return data.docs
