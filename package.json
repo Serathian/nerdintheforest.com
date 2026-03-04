@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "maplibre-gl": "^5.19.0",
@@ -14,11 +16,14 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.4",
     "@tailwindcss/postcss": "^4",
     "@types/maplibre-gl": "^1.13.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.3",
+    "eslint-config-next": "^16.1.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
