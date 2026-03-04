@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import { marked } from 'marked'
 
 import { fetchPostBySlug, fetchAllPostSlugs } from '@/lib/api'
 import { formatDate, formatReadingTime, formatDistance, formatDuration } from '@/lib/format'
@@ -141,7 +142,7 @@ export default async function PostPage({ params }: PostPageProps) {
         {post.body && (
           <div
             className="prose"
-            dangerouslySetInnerHTML={{ __html: post.body }}
+            dangerouslySetInnerHTML={{ __html: marked(post.body) }}
           />
         )}
 
