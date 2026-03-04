@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@basecamp-cms/basecamp-cms-types": "^1.0.0",
     "maplibre-gl": "^5.19.0",
     "next": "16.1.6",
     "react": "19.2.3",

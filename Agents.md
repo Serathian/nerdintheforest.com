@@ -798,10 +798,29 @@ Map style URL: `https://api.maptiler.com/maps/outdoor/style.json?key={KEY}`
 
 ---
 
+## CMS Types Package
+
+All CMS collection types are generated from Payload CMS and published to npm as:
+
+```
+@basecamp-cms/basecamp-cms-types
+```
+
+**Do not define CMS collection types locally.** Import them from this package.
+
+```typescript
+import type { NitfPost, NitfLocation, NitfTrail } from '@basecamp-cms/basecamp-cms-types'
+```
+
+The local `src/types/index.ts` re-exports these and adds frontend-only types (e.g. `NitfPostGeo`).
+Use `from '@/types'` within the project — it will resolve to the package types transitively.
+
+---
+
 ## Key Imports Available (all pre-built)
 
 ```typescript
-// Types
+// Types (local re-exports from @basecamp-cms/basecamp-cms-types + frontend-only additions)
 import type { NitfPost, NitfPostGeo, NitfLocation, NitfTrail, PostType } from '@/types'
 
 // API
