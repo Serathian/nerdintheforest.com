@@ -39,7 +39,7 @@ export default function MiniMap({ latitude, longitude, zoom = 12, trailGpxUrl }:
       map.on('load', async () => {
         const geojson = await fetchGpxAsGeoJson(trailGpxUrl)
         if (!geojson) return
-        map.addSource('trail', { type: 'geojson', data: geojson })
+        map.addSource('trail', { type: 'geojson', data: geojson as GeoJSON.Feature })
         map.addLayer({
           id: 'trail-line',
           type: 'line',

@@ -5,7 +5,6 @@ import remarkRehype from 'remark-rehype'
 import rehypeReact from 'rehype-react'
 import type { ComponentPropsWithoutRef } from 'react'
 
-// @ts-expect-error rehype-react jsx types
 import { Fragment, jsx, jsxs } from 'react/jsx-runtime'
 
 function P(props: ComponentPropsWithoutRef<'p'>) {
