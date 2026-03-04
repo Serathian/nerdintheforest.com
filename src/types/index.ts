@@ -1,19 +1,23 @@
-// ─── Enums / Union types ──────────────────────────────────────
-export type PostType = 'adventure' | 'tips' | 'recipe' | 'review' | 'general'
-export type PostStatus = 'draft' | 'published' | 'archived'
+import type {
+  NitfPost as CmsNitfPost,
+  NitfTrail as CmsNitfTrail,
+  Tag,
+  NitfLocation,
+} from '@serathian/basecamp-cms-types'
 
-export type PlaceType =
-  | 'forest' | 'lake' | 'park' | 'viewpoint' | 'summit'
-  | 'town' | 'beach' | 'island' | 'valley' | 'other'
+// Re-export types that are used as-is from the CMS schema
+export type { Tag, NitfLocation, NitfWaypoint } from '@serathian/basecamp-cms-types'
 
-export type MarkerType =
-  | 'camp' | 'cabin' | 'cabin-paid' | 'camp-paid' | 'laavu'
-  | 'motorhome' | 'day-visit' | 'trailhead' | 'viewpoint' | 'other'
+// ─── Union types (derived from canonical CMS schema) ──────────
+export type PostType       = CmsNitfPost['type']
+export type PostStatus     = CmsNitfPost['status']
+export type PlaceType      = NitfLocation['place_type']
+export type MarkerType     = NitfLocation['marker_type']
+export type TrailDifficulty = NonNullable<CmsNitfTrail['difficulty']>
+export type TrailType      = NonNullable<CmsNitfTrail['trail_type']>
 
-export type TrailDifficulty = 'easy' | 'moderate' | 'hard' | 'expert'
-export type TrailType = 'loop' | 'out-and-back' | 'point-to-point'
-
-// ─── Shared primitives ────────────────────────────────────────
+// ─── MediaItem ────────────────────────────────────────────────
+// Populated/non-null subset of CMS Media, as returned by depth≥1 fetches.
 export interface MediaItem {
   id: number
   url: string
@@ -25,70 +29,27 @@ export interface MediaItem {
   filesize?: number
 }
 
+// ─── Author ───────────────────────────────────────────────────
+// Populated form of CMS Author (avatar resolved at depth≥1).
 export interface Author {
   id: number
   name: string
   slug: string
-  bio?: string
-  avatar?: MediaItem
-}
-
-export interface Tag {
-  id: number
-  name: string
-  slug: string
-}
-
-// ─── NitfLocation ─────────────────────────────────────────────
-export interface NitfLocation {
-  id: number
-  name: string
-  description?: string
-  place_type: PlaceType
-  marker_type: MarkerType
-  latitude: number
-  longitude: number
-  country?: string
+  bio?: string | null
+  avatar?: MediaItem | null
 }
 
 // ─── NitfTrail ────────────────────────────────────────────────
-export interface NitfTrail {
-  id: number
-  title: string
-  status: 'draft' | 'published'
-  gpx_file?: MediaItem
-  distance_km?: number
-  elevation_gain_m?: number
-  elevation_loss_m?: number
-  duration_hours?: number
-  difficulty?: TrailDifficulty
-  trail_type?: TrailType
-  latitude_start?: number
-  longitude_start?: number
-  bounding_box?: unknown
-  country?: string
-  region?: string
-  season_start?: string
-  season_end?: string
-}
-
-// ─── NitfWaypoint ─────────────────────────────────────────────
-export interface NitfWaypoint {
-  id: number
-  trail: number
-  name: string
-  description?: string
-  type: 'viewpoint' | 'summit' | 'water' | 'hazard' | 'camp' | 'junction' | 'trailhead' | 'other'
-  latitude: number
-  longitude: number
-  altitude_m?: number
-  sort?: number
+// Depth-1 resolved form: gpx_file is a populated MediaItem rather than a number union.
+export interface NitfTrail extends Omit<CmsNitfTrail, 'gpx_file'> {
+  gpx_file?: MediaItem | null
 }
 
 // ─── Location junction entry (on posts) ───────────────────────
 export interface LocationEntry {
   location: NitfLocation
-  visit_date?: string
+  visit_date?: string | null
+  id?: string | null
 }
 
 // ─── Recipe / Review metadata shapes ─────────────────────────
@@ -103,37 +64,26 @@ export interface RecipeMetaData {
 
 export interface ReviewMetaData {
   subject?: string
-  rating?: number   // 1–5
+  rating?: number
   pros?: string[]
   cons?: string[]
   verdict?: string
   [key: string]: unknown
 }
 
-// ─── Full NitfPost ────────────────────────────────────────────
-export interface NitfPost {
-  id: number
-  status: PostStatus
-  title: string
-  slug: string
-  type: PostType
-  excerpt?: string
-  body?: string
-  cover_image?: MediaItem
-  author?: Author
-  tags?: Tag[]
-  published_at?: string
-  reading_time_minutes?: number
-  latitude?: number
-  longitude?: number
-  trail?: NitfTrail
-  locations?: LocationEntry[]
-  review_meta?: ReviewMetaData
-  recipe_meta?: RecipeMetaData
-  seo_title?: string
-  seo_description?: string
-  createdAt: string
-  updatedAt: string
+// ─── NitfPost ─────────────────────────────────────────────────
+// Depth-2 resolved form: all relations are populated objects, not ID numbers.
+export interface NitfPost extends Omit<
+  CmsNitfPost,
+  'cover_image' | 'author' | 'tags' | 'trail' | 'locations' | 'review_meta' | 'recipe_meta'
+> {
+  cover_image?: MediaItem | null
+  author?: Author | null
+  tags?: Tag[] | null
+  trail?: NitfTrail | null
+  locations?: LocationEntry[] | null
+  review_meta?: ReviewMetaData | null
+  recipe_meta?: RecipeMetaData | null
 }
 
 // ─── Slim post for map / feed ─────────────────────────────────
@@ -142,12 +92,12 @@ export interface NitfPostGeo {
   title: string
   slug: string
   type: PostType
-  excerpt?: string
-  cover_image?: MediaItem
-  published_at?: string
-  reading_time_minutes?: number
-  latitude?: number
-  longitude?: number
+  excerpt?: string | null
+  cover_image?: MediaItem | null
+  published_at?: string | null
+  reading_time_minutes?: number | null
+  latitude?: number | null
+  longitude?: number | null
 }
 
 // ─── PostGIS nearby result ────────────────────────────────────

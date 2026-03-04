@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@serathian/basecamp-cms-types": "^1.0.3",
     "maplibre-gl": "^5.19.0",
     "next": "16.1.6",
     "react": "19.2.3",

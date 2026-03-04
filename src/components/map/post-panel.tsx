@@ -89,7 +89,7 @@ export default function PostPanel({ post, onClose }: PostPanelProps) {
             className="text-[11px] text-stone mb-4"
             style={{ fontFamily: 'var(--font-mono)' }}
           >
-            {formatDate(post.published_at)}
+            {formatDate(post.published_at ?? undefined)}
             {post.reading_time_minutes ? ` · ${post.reading_time_minutes} min read` : ''}
           </p>
 
