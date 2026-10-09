@@ -1,0 +1,221 @@
+{
+  "name": "Nordic Field Notes & Cartography",
+  "projectId": "projects/2793969659911941977",
+  "colorMode": "LIGHT",
+  "font": "NEWSREADER",
+  "headlineFont": "NEWSREADER",
+  "bodyFont": "NEWSREADER",
+  "labelFont": "JETBRAINS_MONO",
+  "roundness": "ROUND_FOUR",
+  "customColor": "#1b2e24",
+  "colors": {
+    "surface": "#fef9ed",
+    "surface-dim": "#dedace",
+    "surface-bright": "#fef9ed",
+    "surface-container-lowest": "#ffffff",
+    "surface-container-low": "#f8f3e7",
+    "surface-container": "#f3ede1",
+    "surface-container-high": "#ede8dc",
+    "surface-container-highest": "#e7e2d6",
+    "on-surface": "#1d1c14",
+    "on-surface-variant": "#424844",
+    "inverse-surface": "#323028",
+    "inverse-on-surface": "#f5f0e4",
+    "outline": "#737874",
+    "outline-variant": "#c2c8c2",
+    "surface-tint": "#4f6357",
+    "primary": "#1b2e24",
+    "on-primary": "#ffffff",
+    "primary-container": "#1b2e24",
+    "on-primary-container": "#819689",
+    "inverse-primary": "#b6ccbd",
+    "secondary": "#d9531e",
+    "on-secondary": "#ffffff",
+    "secondary-container": "#ff6e38",
+    "on-secondary-container": "#611b00",
+    "tertiary": "#526056",
+    "on-tertiary": "#ffffff",
+    "tertiary-container": "#202d25",
+    "on-tertiary-container": "#86958a",
+    "error": "#ba1a1a",
+    "on-error": "#ffffff",
+    "error-container": "#ffdad6",
+    "on-error-container": "#93000a",
+    "background": "#fef9ed",
+    "on-background": "#1d1c14",
+    "surface-variant": "#e7e2d6"
+  },
+  "typography": {
+    "headline-xl": {
+      "fontFamily": "Newsreader",
+      "fontSize": "48px",
+      "fontWeight": "400",
+      "lineHeight": "56px",
+      "letterSpacing": "-0.02em"
+    },
+    "headline-xl-mobile": {
+      "fontFamily": "Newsreader",
+      "fontSize": "34px",
+      "fontWeight": "400",
+      "lineHeight": "42px",
+      "letterSpacing": "-0.01em"
+    },
+    "headline-lg": {
+      "fontFamily": "Newsreader",
+      "fontSize": "36px",
+      "fontWeight": "400",
+      "lineHeight": "44px",
+      "letterSpacing": "-0.015em"
+    },
+    "headline-lg-mobile": {
+      "fontFamily": "Newsreader",
+      "fontSize": "28px",
+      "fontWeight": "400",
+      "lineHeight": "36px",
+      "letterSpacing": "-0.01em"
+    },
+    "headline-md": {
+      "fontFamily": "Newsreader",
+      "fontSize": "26px",
+      "fontWeight": "500",
+      "lineHeight": "34px"
+    },
+    "headline-sm": {
+      "fontFamily": "Newsreader",
+      "fontSize": "20px",
+      "fontWeight": "500",
+      "lineHeight": "28px"
+    },
+    "body-lg": {
+      "fontFamily": "Newsreader",
+      "fontSize": "19px",
+      "fontWeight": "400",
+      "lineHeight": "30px"
+    },
+    "body-md": {
+      "fontFamily": "Newsreader",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "26px"
+    },
+    "body-sm": {
+      "fontFamily": "Newsreader",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "22px"
+    },
+    "label-lg": {
+      "fontFamily": "JetBrains Mono",
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "lineHeight": "18px",
+      "letterSpacing": "0.05em"
+    },
+    "label-md": {
+      "fontFamily": "JetBrains Mono",
+      "fontSize": "11px",
+      "fontWeight": "500",
+      "lineHeight": "16px",
+      "letterSpacing": "0.08em"
+    },
+    "label-sm": {
+      "fontFamily": "JetBrains Mono",
+      "fontSize": "10px",
+      "fontWeight": "400",
+      "lineHeight": "14px",
+      "letterSpacing": "0.1em"
+    }
+  },
+  "rounded": {
+    "sm": "0.125rem",
+    "DEFAULT": "0.25rem",
+    "md": "0.375rem",
+    "lg": "0.5rem",
+    "xl": "0.75rem",
+    "full": "9999px"
+  },
+  "spacing": {
+    "gutter": "1rem",
+    "gutter-desktop": "1.5rem",
+    "margin": "1rem",
+    "margin-tablet": "2rem",
+    "margin-desktop": "3rem",
+    "space-xs": "0.25rem",
+    "space-sm": "0.5rem",
+    "space-md": "1rem",
+    "space-lg": "1.5rem",
+    "space-xl": "2.5rem"
+  },
+  "screens": [
+    {
+      "id": "a93cc7f0c2754204a827ca61b9faeec6",
+      "title": "Nordic Atlas - Browse Mode (Collapsed Console)",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2048"
+    },
+    {
+      "id": "769ed1fdce9c4e7f9217667254ae0b9f",
+      "title": "Nordic Atlas - Docked Sidebar Dossier Card",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "2048"
+    },
+    {
+      "id": "61e99a6692c74630a9eb37e5140c80f9",
+      "title": "Field Dossier - Panoramic Hero & 3-Column Field Gallery",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "7346"
+    },
+    {
+      "id": "e1c382e0132748d78924ea6302aa4427",
+      "title": "Backcountry Gear Ledger - Tabbed Collections Layout",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "6964"
+    },
+    {
+      "id": "6de42457de594382b82fb4518182b3c7",
+      "title": "Field Dispatches & Dossier Archive",
+      "deviceType": "DESKTOP",
+      "width": "2560",
+      "height": "5446"
+    },
+    {
+      "id": "5aa410902c584116a8582521266216ea",
+      "title": "Nordic Atlas Mobile - Peeking Recent Tray & Static Bar",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "1768"
+    },
+    {
+      "id": "b7a4400204a147c7911131436f96a414",
+      "title": "Nordic Atlas Mobile - Standardized Dossier Sheet",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "2756"
+    },
+    {
+      "id": "c63f2fb3d2a546769a60d0449592d7ee",
+      "title": "Mobile Field Dossier - Panoramic Hero & Field Gallery",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "8034"
+    },
+    {
+      "id": "047b6464e21d492293074570a324b062",
+      "title": "Nordic Atlas Mobile - Active Filter Sheet Modal",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "1796"
+    },
+    {
+      "id": "2bdb5a55a52b4f8fbf3d9426d274ebcd",
+      "title": "Mobile Backcountry Gear Ledger - Seasonal Collections",
+      "deviceType": "MOBILE",
+      "width": "780",
+      "height": "5786"
+    }
+  ]
+}
