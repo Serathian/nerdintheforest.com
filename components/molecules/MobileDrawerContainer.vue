@@ -39,11 +39,11 @@ function close() {
       <div v-if="backdrop && isOpen" class="drawer-backdrop" aria-label="Collapse drawer" @click="close" />
     </Transition>
 
-    <div class="drawer-dock-container">
+    <div class="drawer-dock-container mobile-map-bottom-container">
       <!-- ===================================================================== -->
       <!-- SECTION 1: MAIN SECTION (Always visible at rest, sitting above tab)   -->
       <!-- ===================================================================== -->
-      <div class="main-section-card">
+      <div class="main-section-card mobile-drawer-main-card">
         <slot name="main" />
       </div>
 

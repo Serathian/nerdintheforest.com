@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { fallbackFieldNotes } from '../../composables/useNitfCms'
+import { calculateMapFocusPadding } from '../../utils/mapViewport'
 
 describe('Mobile Map View Component Specifications', () => {
   it('validates Nordic Field Notes color tokens in CSS variables', () => {
@@ -114,4 +115,48 @@ describe('Mobile Map View Component Specifications', () => {
     const bottomNavOffsetPx = 68
     expect(bottomNavOffsetPx).toBe(68)
   })
+
+  it('centers map elements in visible viewport when peeking a location with or without trailhead', () => {
+    const windowHeight = 844
+    const viewportBottom = windowHeight - 64 // 780px map canvas
+    const topClearance = 76
+
+    // Scenario A: Location WITH trailhead (tall peek card ~340px)
+    const drawerHeightWithTrailhead = 340
+    const drawerTopWithTrailhead = windowHeight - drawerHeightWithTrailhead // 504px
+    const paddingWithTrailhead = calculateMapFocusPadding({
+      windowHeight,
+      viewportBottom,
+      drawerTop: drawerTopWithTrailhead,
+      topClearance
+    })
+
+    // Bounds center calculation in MapLibre:
+    // (pad.top + (canvasHeight - pad.bottom)) / 2
+    const boundsCenterY =
+      (paddingWithTrailhead.top + (viewportBottom - paddingWithTrailhead.bottom)) / 2
+    expect(boundsCenterY).toBe(drawerTopWithTrailhead / 2) // Exactly 252px
+    // Equal clearance from top of screen and from top of drawer
+    expect(boundsCenterY - 0).toBe(drawerTopWithTrailhead - boundsCenterY)
+
+    // Scenario B: Location WITHOUT trailhead (compact peek card ~240px)
+    const drawerHeightWithoutTrailhead = 240
+    const drawerTopWithoutTrailhead = windowHeight - drawerHeightWithoutTrailhead // 604px
+    const paddingWithoutTrailhead = calculateMapFocusPadding({
+      windowHeight,
+      viewportBottom,
+      drawerTop: drawerTopWithoutTrailhead,
+      topClearance
+    })
+
+    // Single-point offset in MapLibre:
+    // Y = canvasHeight / 2 + (pad.top - pad.bottom) / 2
+    const singlePointOffsetY =
+      Math.round((paddingWithoutTrailhead.top - paddingWithoutTrailhead.bottom) / 2)
+    const singlePointY = viewportBottom / 2 + singlePointOffsetY
+    expect(singlePointY).toBe(drawerTopWithoutTrailhead / 2) // Exactly 302px
+    // Equal clearance from top of screen and from top of drawer
+    expect(singlePointY - 0).toBe(drawerTopWithoutTrailhead - singlePointY)
+  })
 })
+

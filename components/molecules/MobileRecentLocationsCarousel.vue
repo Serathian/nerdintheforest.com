@@ -22,27 +22,14 @@ const emit = defineEmits<{
   <div class="recent-locations-container">
     <!-- Horizontal Snapping Card Carousel -->
     <div v-if="fieldNotes.length > 0" class="locations-carousel">
-      <RecentCard
-        v-for="note in fieldNotes"
-        :key="note.id"
-        :id="note.id"
-        :number-tag="note.numberTag"
-        :title="note.title"
-        :description="note.description"
-        :visited-count="note.visitedCount"
+      <RecentCard v-for="note in fieldNotes" :key="note.id" :id="note.id" :number-tag="note.numberTag"
+        :title="note.title" :description="note.description" :visited-count="note.visitedCount"
         :dispatch-count="note.visitedCount && note.visitedCount > 0 ? (note.dispatches?.length ?? note.visitedCount) : 0"
-        :amenities="note.amenities"
-        :latitude="note.latitude"
-        :longitude="note.longitude"
-        :has-trailhead="!!note.trailhead"
-        :trailhead-lat="note.trailhead?.latitude"
-        :trailhead-lng="note.trailhead?.longitude"
-        :active="note.id === selectedId"
-        @click="emit('select-location', note.id)"
-        @view-location="emit('select-location', note.id)"
-        @read-story="(id) => emit('read-story', id)"
-        @navigate="(p) => emit('navigate', p)"
-      />
+        :amenities="note.amenities" :latitude="note.latitude" :longitude="note.longitude"
+        :has-trailhead="!!note.trailhead" :trailhead-lat="note.trailhead?.latitude"
+        :trailhead-lng="note.trailhead?.longitude" :active="note.id === selectedId"
+        @click="emit('select-location', note.id)" @view-location="emit('select-location', note.id)"
+        @read-story="(id) => emit('read-story', id)" @navigate="(p) => emit('navigate', p)" />
     </div>
 
     <!-- Empty state when active filters yield 0 matches -->
@@ -62,7 +49,6 @@ const emit = defineEmits<{
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding-bottom: 76px; /* Clears 68px BottomNav */
   background-color: var(--color-surface-container-high, #e5d6b8);
   box-sizing: border-box;
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { FilterState } from '~/components/organisms/FilterModal.vue'
+import { calculateMapFocusPadding, measureDrawerTop } from '~/utils/mapViewport'
 
 useHead({
   title: 'Nerd in the Forest — Nordic Cartography & Adventure Atlas',
@@ -35,12 +36,22 @@ const filters = ref<FilterState>({
 
 const { fieldNotes, mapWaypoints, fetchPosts, fetchWaypoints } = useNitfCms()
 
+function handleWindowResize() {
+  if (selectedNoteId.value) {
+    focusSelection()
+  }
+}
+
 onMounted(async () => {
   try {
     await fetchPosts()
     await fetchWaypoints()
   } catch (e) {
     // Graceful fallback to default fieldNotes/mapWaypoints
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', handleWindowResize)
   }
 
   // Check URL query param for direct story link sharing (e.g., ?story=langvatnet-gapahuk or ?story=note-1)
@@ -54,6 +65,12 @@ onMounted(async () => {
         isReaderOpen.value = true
       }
     }
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', handleWindowResize)
   }
 })
 
@@ -147,26 +164,41 @@ const viewportRef = ref<HTMLElement | null>(null)
 const drawerRef = ref<any>(null)
 
 /**
- * Space (px) the camera must keep clear: the floating top console, the right-hand map
- * controls, and whatever part of the map the bottom drawer / peek card currently covers.
- * Uses offsetHeight so the peek card's slide-up transform doesn't skew the measurement.
+ * Space (px) the camera keeps clear: top overlays (brand notch, toast, map controls)
+ * and whatever part of the map the mobileDrawer currently covers at the bottom.
+ * By setting pad.bottom = drawerCoveredHeight + topClearance, the target elements
+ * (whether a single location point or location + trailhead bounds) are centered
+ * in the visible viewport above the mobile drawer.
  */
 function getMapFocusPadding() {
-  const padding = { top: 110, bottom: 48, left: 48, right: 72 }
+  const defaultPadding = { top: 76, bottom: 48, left: 48, right: 72 }
   const viewport = viewportRef.value
-  const drawer: HTMLElement | null =
-    drawerRef.value?.$el?.querySelector?.('.mobile-map-bottom-container') ?? null
-  if (viewport && drawer && typeof window !== 'undefined') {
-    const viewportBottom = viewport.getBoundingClientRect().bottom
-    const drawerTop = window.innerHeight - drawer.offsetHeight
-    padding.bottom = Math.max(0, viewportBottom - drawerTop) + 48
-  }
-  return padding
+  if (!viewport || typeof window === 'undefined') return defaultPadding
+
+  const viewportBottom = viewport.getBoundingClientRect().bottom
+  const drawerTop = measureDrawerTop(drawerRef.value?.$el)
+
+  return calculateMapFocusPadding({
+    windowHeight: window.innerHeight,
+    viewportBottom,
+    drawerTop,
+    topClearance: 76,
+    leftPadding: 48,
+    rightPadding: 72
+  })
 }
 
-function focusSelection() {
+async function focusSelection() {
   const note = fieldNotes.value.find(n => n.id === selectedNoteId.value)
   if (!note || note.longitude == null || note.latitude == null) return
+
+  // Await Vue DOM patch and requestAnimationFrame layout resolution
+  // so the newly rendered peek card and drawer height are accurately measured
+  await nextTick()
+  if (typeof window !== 'undefined') {
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+
   const points: Array<[number, number]> = [[note.longitude, note.latitude]]
   const th = note.trailhead
   if (th && th.latitude != null && th.longitude != null) {
@@ -190,7 +222,7 @@ watch(selectedNoteId, (id) => {
 function handleSelectNote(id: string) {
   if (selectedNoteId.value === id) {
     // Same location re-tapped: the watcher won't fire, so re-frame explicitly
-    nextTick(focusSelection)
+    focusSelection()
     return
   }
   selectedNoteId.value = id
@@ -347,7 +379,7 @@ function showNotification(msg: string) {
       :search-query="searchQuery" :active-category="activeCategory" :active-filter-count="activeFilterCount"
       @select-note="handleSelectNote" @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
         selectedNoteId = p.id
-        mapRef?.flyToWaypoint(p.lng, p.lat)
+        focusSelection()
         showNotification('Opening maps to trailhead...')
       }" @open-filters="handleOpenFilters" @update:search-query="(q) => searchQuery = q"
       @select-category="handleSelectCategory" />
