@@ -15,11 +15,7 @@ const emit = defineEmits<{
 <template>
   <div class="dispatches-track-container">
     <div v-if="dispatches.length > 0" class="dispatches-scroll-track scrollbar-none">
-      <article
-        v-for="disp in dispatches"
-        :key="disp.id"
-        class="dispatch-card"
-      >
+      <article v-for="disp in dispatches" :key="disp.id" class="dispatch-card">
         <div class="dispatch-card-top">
           <div class="dispatch-card-title-row">
             <h4 class="dispatch-card-title font-serif">
@@ -40,11 +36,7 @@ const emit = defineEmits<{
         </div>
 
         <div class="dispatch-card-footer">
-          <button
-            class="dispatch-read-btn font-mono"
-            type="button"
-            @click.stop="emit('read-dispatch', disp)"
-          >
+          <button class="dispatch-read-btn font-mono" type="button" @click.stop="emit('read-dispatch', disp)">
             <span class="material-symbols-outlined text-[13px]">menu_book</span>
             <span>READ DISPATCH</span>
           </button>
@@ -69,7 +61,7 @@ const emit = defineEmits<{
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 8px 14px 76px; /* Clears 68px BottomNav */
+  padding: 10px 10px;
   box-sizing: border-box;
   overflow: hidden;
   background-color: var(--color-surface-container-high, #e5d6b8);

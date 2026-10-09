@@ -18,11 +18,24 @@ const emit = defineEmits<{
 
 <template>
   <div class="location-peek-base">
-    <!-- Location Title & Close Button Row -->
-    <div class="peek-title-row">
-      <h2 class="location-title font-serif">
-        {{ location.title }}
-      </h2>
+    <!-- Location Header Bar -->
+    <div class="peek-header-row">
+      <div class="tag-badges-group">
+        <span class="location-tag font-mono">
+          {{ location.numberTag }}
+        </span>
+
+        <span v-if="(location.visitedCount ?? 0) > 0" class="visited-badge visited font-mono">
+          <span class="material-symbols-outlined check-icon">check_circle</span>
+          VISITED {{ location.visitedCount }}x
+        </span>
+        <span v-else class="visited-badge unvisited font-mono">
+          <span class="material-symbols-outlined check-icon">radio_button_unchecked</span>
+          NOT VISITED
+        </span>
+      </div>
+
+      <!-- Close Button (Returns to Search & Filter only) -->
       <button
         class="peek-close-btn"
         type="button"
@@ -34,36 +47,25 @@ const emit = defineEmits<{
       </button>
     </div>
 
-    <!-- Location Coordinates & Elevation Stamp -->
-    <div class="location-coords-row font-mono">
-      <span class="coords-stamp">
-        [{{ (location.latitude ?? 60.271).toFixed(3) }}°N • {{ (location.longitude ??
-          10.732).toFixed(3) }}°E]
-      </span>
-      <span v-if="location.elevation" class="coords-divider">•</span>
-      <span v-if="location.elevation" class="elevation-stamp">
-        {{ location.elevation }}M ELEV
-      </span>
+    <!-- Location Title & Coordinates / Elevation Stamp -->
+    <div class="title-meta-group">
+      <h2 class="location-title font-serif">
+        {{ location.title }}
+      </h2>
+      <div class="location-coords-row font-mono">
+        <span class="coords-stamp">
+          [{{ (location.latitude ?? 60.271).toFixed(3) }}°N • {{ (location.longitude ??
+            10.732).toFixed(3) }}°E]
+        </span>
+        <span v-if="location.elevation" class="coords-divider">•</span>
+        <span v-if="location.elevation" class="elevation-stamp">
+          {{ location.elevation }}M ELEV
+        </span>
+      </div>
     </div>
 
-    <!-- Amenities Section (Includes Visited Badge) -->
+    <!-- Amenities Widgets (Lean-to, Firewood, Lake Water, Toilet, etc.) -->
     <div class="amenities-row">
-      <!-- Visited status badge integrated into amenities section -->
-      <span
-        v-if="(location.visitedCount ?? 0) > 0"
-        class="amenity-widget visited-pill font-mono"
-      >
-        <span class="material-symbols-outlined widget-icon check-icon">check_circle</span>
-        <span>VISITED {{ location.visitedCount }}X</span>
-      </span>
-      <span
-        v-else
-        class="amenity-widget unvisited-pill font-mono"
-      >
-        <span class="material-symbols-outlined widget-icon check-icon">radio_button_unchecked</span>
-        <span>NOT VISITED</span>
-      </span>
-
       <template v-if="location.amenities && location.amenities.length > 0">
         <span v-for="(amenity, idx) in location.amenities" :key="idx" class="amenity-widget font-mono">
           <span class="material-symbols-outlined widget-icon">{{ amenity.icon }}</span>
@@ -89,15 +91,25 @@ const emit = defineEmits<{
     />
 
     <!-- Action Buttons Row (only shown if location has a trailhead) -->
-    <div v-if="location.trailhead" class="peek-actions-row">
+    <div class="peek-actions-row">
       <button
+        v-if="location.trailhead"
         class="action-btn trailhead-btn font-mono"
         type="button"
-        title="Directions to trailhead"
+        title="Directions from current location"
         @click="emit('navigate', location)"
       >
         <span class="material-symbols-outlined btn-icon">directions</span>
         <span>NAVIGATE TO TRAILHEAD</span>
+      </button>
+      <button
+        v-else
+        class="action-btn trailhead-btn disabled font-mono"
+        type="button"
+        disabled
+      >
+        <span class="material-symbols-outlined btn-icon">explore_off</span>
+        <span>TRAILHEAD ACCESS OFF-GRID</span>
       </button>
     </div>
   </div>
@@ -105,18 +117,60 @@ const emit = defineEmits<{
 
 <style scoped>
 .location-peek-base {
+  width: 100%;
+  padding: 14px 16px 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 100%;
   box-sizing: border-box;
 }
 
-.peek-title-row {
+.peek-header-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+}
+
+.tag-badges-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.location-tag {
+  font-size: 10px;
+  color: var(--color-secondary);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.visited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.visited-badge.visited {
+  background-color: var(--color-primary-container);
+  color: #ffffff;
+  border: 1px solid rgba(27, 46, 36, 0.4);
+}
+
+.visited-badge.unvisited {
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface-variant);
+  border: 1px solid rgba(194, 200, 194, 0.5);
+}
+
+.check-icon {
+  font-size: 11px;
 }
 
 .peek-close-btn {
@@ -140,6 +194,12 @@ const emit = defineEmits<{
   border-color: var(--color-secondary);
 }
 
+.title-meta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .location-title {
   font-size: 20px;
   line-height: 1.25;
@@ -152,7 +212,6 @@ const emit = defineEmits<{
 .location-coords-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   font-size: 10px;
   color: var(--color-lichen-slate);
@@ -172,8 +231,6 @@ const emit = defineEmits<{
 .elevation-stamp {
   color: var(--color-secondary);
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
 }
 
 /* AMENITIES */
@@ -195,27 +252,6 @@ const emit = defineEmits<{
   font-size: 10px;
   font-weight: 500;
   line-height: 1;
-}
-
-.amenity-widget.visited-pill {
-  background-color: var(--color-primary-container);
-  color: #ffffff;
-  border-color: rgba(27, 46, 36, 0.5);
-}
-
-.amenity-widget.visited-pill .widget-icon {
-  color: #72f7ab;
-}
-
-.amenity-widget.unvisited-pill {
-  background-color: var(--color-surface-container);
-  color: var(--color-on-surface-variant);
-  border-color: rgba(194, 200, 194, 0.5);
-}
-
-.amenity-widget.unvisited-pill .widget-icon {
-  color: var(--color-secondary);
-  opacity: 0.7;
 }
 
 .widget-icon {
@@ -270,6 +306,15 @@ const emit = defineEmits<{
 
 .trailhead-btn:active {
   transform: scale(0.99);
+}
+
+.trailhead-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  background-color: var(--color-surface-container);
+  color: var(--color-lichen-slate);
+  border-color: rgba(115, 120, 116, 0.25);
 }
 
 .btn-icon {

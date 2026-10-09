@@ -153,6 +153,7 @@ function close() {
   pointer-events: auto;
   height: min-content;
   position: absolute;
+  padding-bottom: 5px;
   bottom: 0;
   z-index: 10;
   box-sizing: border-box;
@@ -193,9 +194,18 @@ function close() {
 
 /* When expanded, the drawer rises up from behind the nav tabs and over the main section */
 .collapsible-drawer-sheet.is-open {
-  height: var(--drawer-height, 388px);
+  height: min-content;
   pointer-events: auto;
-  box-shadow: 0 -12px 32px rgba(6, 25, 16, 0.28);
+}
+
+.collapsible-drawer-sheet.is-open::after {
+  content: '';
+  display: block;
+  height: var(--tier1-nav-height, 94px);
+  background: var(--color-surface-container-high, #e5d6b8);
+  width: 100%;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* ========================================================================= */
@@ -298,6 +308,7 @@ function close() {
   position: relative;
   z-index: 1;
   pointer-events: none;
+  border-bottom: 1.5px solid rgba(115, 120, 116, 0.45);
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
