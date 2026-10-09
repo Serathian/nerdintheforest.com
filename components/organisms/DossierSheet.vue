@@ -20,6 +20,7 @@ interface FieldNote {
   latitude?: number
   longitude?: number
   elevation?: number
+  trailhead?: { name: string; latitude: number; longitude: number }
 }
 
 interface Props {
@@ -38,12 +39,14 @@ const lat = computed(() => props.note?.latitude ?? 60.25)
 const lng = computed(() => props.note?.longitude ?? 10.7167)
 
 function handleNavigateTrailhead() {
-  if (!props.note) return
+  if (!props.note?.trailhead) return
+  const destLat = props.note.trailhead.latitude
+  const destLng = props.note.trailhead.longitude
   if (typeof window !== 'undefined') {
     const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
     const url = isApple
-      ? `maps://maps.apple.com/?daddr=${lat.value},${lng.value}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${lat.value},${lng.value}`
+      ? `maps://maps.apple.com/?daddr=${destLat},${destLng}&dirflg=d`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`
     window.open(url, '_blank')
   }
 }
@@ -137,7 +140,7 @@ function handleNavigateTrailhead() {
             <span class="font-label-sm text-[10px] font-mono uppercase tracking-wider text-lichen-slate block mb-1.5">
               WAYPOINT PROVISIONS & AMENITIES
             </span>
-            <div class="flex flex-wrap gap-1.5">
+            <div v-if="note.amenities && note.amenities.length > 0" class="flex flex-wrap gap-1.5">
               <span
                 v-for="(amenity, idx) in note.amenities"
                 :key="idx"
@@ -147,12 +150,17 @@ function handleNavigateTrailhead() {
                 {{ amenity.label }}
               </span>
             </div>
+            <div v-else class="text-[11px] font-mono text-lichen-slate/80 italic flex items-center gap-1.5 py-1">
+              <span class="material-symbols-outlined text-[14px]">shield_with_heart</span>
+              <span>Site unvisited • Provisions unverified until on-site survey</span>
+            </div>
           </div>
         </div>
 
         <!-- Sticky Action Buttons Footer -->
         <div class="px-4 py-3 border-t border-outline-variant/40 bg-surface-container-high/90 backdrop-blur flex items-center gap-2 shrink-0 pb-safe">
           <button
+            v-if="(note.visitedCount ?? 0) > 0"
             class="flex-1 h-11 rounded bg-primary hover:bg-primary-container text-white font-mono text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all"
             type="button"
             @click="emit('read-story', note)"
@@ -161,8 +169,21 @@ function handleNavigateTrailhead() {
             <span class="material-symbols-outlined text-[15px]">menu_book</span>
           </button>
           <button
+            v-else
+            class="flex-1 h-11 rounded bg-surface-container text-on-surface-variant/40 border border-outline/20 font-mono text-[11px] font-medium uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+            type="button"
+            disabled
+            title="No field dispatches logged for unvisited sites"
+          >
+            <span>NO DISPATCHES</span>
+            <span class="material-symbols-outlined text-[15px]">drafts</span>
+          </button>
+
+          <button
+            v-if="note.trailhead"
             class="flex-1 h-11 rounded bg-surface-container-highest hover:bg-surface-container border border-outline/35 text-primary font-mono text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all"
             type="button"
+            title="Directions to trailhead"
             @click="handleNavigateTrailhead"
           >
             <span>NAVIGATE TRAILHEAD</span>

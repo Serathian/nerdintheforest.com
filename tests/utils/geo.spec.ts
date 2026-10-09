@@ -34,4 +34,27 @@ describe('trailhead fallback data', () => {
       expect(km).toBeLessThan(10)
     }
   })
+
+  it('provides real hiking trail geometry connecting trailhead to destination', () => {
+    const notesWithTrailGeom = fallbackFieldNotes.filter(n => n.trailhead?.trailGeometry)
+    expect(notesWithTrailGeom.length).toBeGreaterThanOrEqual(4)
+
+    for (const note of notesWithTrailGeom) {
+      const geom = note.trailhead!.trailGeometry!
+      expect(geom.length).toBeGreaterThan(15) // Winding hiking trail with multiple waypoints
+      
+      // Calculate total winding trail distance
+      let trailDist = 0
+      for (let i = 1; i < geom.length; i++) {
+        trailDist += haversineKm(geom[i - 1], geom[i])
+      }
+      
+      const straightDist = haversineKm(
+        [note.longitude, note.latitude],
+        [note.trailhead!.longitude, note.trailhead!.latitude]
+      )
+      // Winding hiking trail distance should be equal to or greater than straight line
+      expect(trailDist).toBeGreaterThanOrEqual(straightDist * 0.95)
+    }
+  })
 })

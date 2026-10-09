@@ -154,11 +154,11 @@ function closeDispatch() {
 
             <!-- Footer Action -->
             <div class="card-footer">
-              <span class="read-action font-mono">
-                READ DISPATCH <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>
-              </span>
               <span class="coord-tag font-mono">
                 [{{ note.latitude?.toFixed(2) }}°N • {{ note.longitude?.toFixed(2) }}°E]
+              </span>
+              <span class="read-action font-mono">
+                READ DISPATCH <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>
               </span>
             </div>
           </div>
@@ -432,23 +432,35 @@ function closeDispatch() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   border-top: 1px solid rgba(115, 120, 116, 0.15);
   padding-top: 10px;
   margin-top: 6px;
 }
 
 .read-action {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+  white-space: nowrap;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--color-secondary);
+  transition: transform 0.15s ease;
+}
+
+.ledger-card:hover .read-action {
+  transform: translateX(2px);
 }
 
 .coord-tag {
   font-size: 9px;
   color: rgba(115, 120, 116, 0.7);
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

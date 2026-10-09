@@ -21,19 +21,12 @@ function isTabActive(path: string) {
 <template>
   <nav class="bottom-nav">
     <div class="bottom-nav-container">
-      <NuxtLink
-        v-for="tab in tabs"
-        :key="tab.id"
-        :to="tab.path"
-        :class="[
-          'nav-item',
-          isTabActive(tab.path) ? 'active' : ''
-        ]"
-      >
-        <span
-          class="material-symbols-outlined nav-icon"
-          :style="isTabActive(tab.path) ? 'font-variation-settings: \'FILL\' 1;' : ''"
-        >
+      <NuxtLink v-for="tab in tabs" :key="tab.id" :to="tab.path" :class="[
+        'nav-item',
+        isTabActive(tab.path) ? 'active' : ''
+      ]">
+        <span class="material-symbols-outlined nav-icon"
+          :style="isTabActive(tab.path) ? 'font-variation-settings: \'FILL\' 1;' : ''">
           {{ tab.icon }}
         </span>
         <span class="nav-label font-mono">
@@ -169,18 +162,5 @@ function isTabActive(path: string) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 600;
-}
-
-/* Floor seal strip to anchor bottom edge */
-.bottom-nav::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 8px;
-  background-color: #cdbe9e;
-  z-index: 0;
-  border-top: 1px solid rgba(115, 120, 116, 0.3);
 }
 </style>

@@ -18,6 +18,7 @@ export interface MapTrailhead {
   name: string
   lat: number
   lng: number
+  trailGeometry?: Array<[number, number]> | null
 }
 
 export interface MapFocusPadding {
@@ -118,6 +119,28 @@ function segmentTextRotation(a: [number, number], b: [number, number]): number {
   return deg
 }
 
+// Reactive cache for dynamically fetched hiking trail geometries
+const dynamicTrailRoutes = ref<Record<string, Array<[number, number]>>>({})
+
+async function fetchDynamicHikingTrail(selectedId: string, from: [number, number], to: [number, number]) {
+  if (dynamicTrailRoutes.value[selectedId]) return
+  try {
+    const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${to[0]},${to[1]};${from[0]},${from[1]}?overview=full&geometries=geojson`
+    const res = await fetch(url)
+    if (!res.ok) return
+    const data = await res.json()
+    if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length) {
+      dynamicTrailRoutes.value[selectedId] = data.routes[0].geometry.coordinates
+      if (map && map.getSource('nitf-trailhead-link')) {
+        setSourceData('nitf-trailhead', buildTrailheadGeoJSON(props.trailhead))
+        setSourceData('nitf-trailhead-link', buildTrailheadLinkGeoJSON(props.trailhead))
+      }
+    }
+  } catch (_) {
+    // Graceful fallback to pre-mapped or direct link
+  }
+}
+
 /**
  * Trailhead parking point + a single midpoint feature carrying the distance annotation.
  * (A `line-center` label on the link would be duplicated wherever the line crosses tile boundaries.)
@@ -126,7 +149,32 @@ function buildTrailheadGeoJSON(trailhead?: MapTrailhead | null) {
   const from = getSelectedCoords()
   if (!trailhead || !from) return EMPTY_FC
   const to: [number, number] = [trailhead.lng, trailhead.lat]
-  const mid: [number, number] = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]
+
+  const cachedRoute = props.selectedId ? dynamicTrailRoutes.value[props.selectedId] : null
+  const trail = trailhead.trailGeometry || cachedRoute
+
+  let mid: [number, number] = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]
+  let rotation = segmentTextRotation(to, from)
+  let dist = haversineKm(from, to)
+
+  if (trail && trail.length >= 2) {
+    dist = 0
+    for (let i = 1; i < trail.length; i++) {
+      dist += haversineKm(trail[i - 1], trail[i])
+    }
+    const halfDist = dist / 2
+    let accumulated = 0
+    for (let i = 1; i < trail.length; i++) {
+      const seg = haversineKm(trail[i - 1], trail[i])
+      if (accumulated + seg >= halfDist) {
+        mid = trail[i]
+        rotation = segmentTextRotation(trail[i - 1], trail[i])
+        break
+      }
+      accumulated += seg
+    }
+  }
+
   return {
     type: 'FeatureCollection' as const,
     features: [
@@ -139,8 +187,8 @@ function buildTrailheadGeoJSON(trailhead?: MapTrailhead | null) {
         type: 'Feature' as const,
         properties: {
           kind: 'distance',
-          distanceLabel: formatDistance(haversineKm(from, to)),
-          rotation: segmentTextRotation(from, to)
+          distanceLabel: formatDistance(dist),
+          rotation: rotation
         },
         geometry: { type: 'Point' as const, coordinates: mid }
       }
@@ -152,13 +200,35 @@ function buildTrailheadLinkGeoJSON(trailhead?: MapTrailhead | null) {
   const from = getSelectedCoords()
   if (!trailhead || !from) return EMPTY_FC
   const to: [number, number] = [trailhead.lng, trailhead.lat]
+
+  const cachedRoute = props.selectedId ? dynamicTrailRoutes.value[props.selectedId] : null
+  const trail = trailhead.trailGeometry || cachedRoute
+
+  let coords: Array<[number, number]> = [to, from]
+
+  if (trail && trail.length >= 2) {
+    const startDistToTrailhead = haversineKm(trail[0], to)
+    const endDistToTrailhead = haversineKm(trail[trail.length - 1], to)
+
+    const oriented = [...trail]
+    if (startDistToTrailhead > endDistToTrailhead) {
+      oriented.reverse()
+    }
+    // Snap exact start to trailhead and end to location
+    oriented[0] = to
+    oriented[oriented.length - 1] = from
+    coords = oriented
+  }
+
   return {
     type: 'FeatureCollection' as const,
     features: [
       {
         type: 'Feature' as const,
-        properties: {},
-        geometry: { type: 'LineString' as const, coordinates: [from, to] }
+        properties: {
+          isHikingTrail: !!trail
+        },
+        geometry: { type: 'LineString' as const, coordinates: coords }
       }
     ]
   }
@@ -200,7 +270,13 @@ onMounted(() => {
         },
         'nitf-waypoints': {
           type: 'geojson',
-          data: buildWaypointsGeoJSON(props.waypoints, props.selectedId)
+          data: buildWaypointsGeoJSON(props.waypoints, props.selectedId),
+          cluster: true,
+          clusterMaxZoom: 12,
+          clusterRadius: 50,
+          clusterProperties: {
+            hasSelected: ['any', ['==', ['get', 'isSelected'], true]]
+          }
         },
         'nitf-user-location': {
           type: 'geojson',
@@ -263,7 +339,7 @@ onMounted(() => {
           id: 'nitf-trailhead-link',
           type: 'line',
           source: 'nitf-trailhead-link',
-          layout: { 'line-cap': 'butt', 'line-join': 'round' },
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': '#d9531e',
             'line-width': 2.5,
@@ -318,11 +394,54 @@ onMounted(() => {
             'text-halo-width': 2
           }
         },
-        // 4. MAP LAYER: Category-stylized waypoint pins (images generated on demand in utils/mapMarkers.ts)
+        // 4a. MAP LAYER: Waypoint Clusters (Tactile Nordic badges when zoomed out)
+        {
+          id: 'nitf-cluster-circle',
+          type: 'circle',
+          source: 'nitf-waypoints',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': [
+              'case',
+              ['==', ['get', 'hasSelected'], true],
+              '#d9531e',
+              '#1b2e24'
+            ],
+            'circle-radius': [
+              'step',
+              ['get', 'point_count'],
+              16,
+              5, 19,
+              10, 23
+            ],
+            'circle-stroke-width': 2.5,
+            'circle-stroke-color': props.activeLayer === 'satellite' ? '#ffffff' : '#fef9ed',
+            'circle-opacity': 0.95
+          }
+        },
+        // 4b. MAP LAYER: Waypoint Clusters Count
+        {
+          id: 'nitf-cluster-count',
+          type: 'symbol',
+          source: 'nitf-waypoints',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 12,
+            'text-allow-overlap': true,
+            'text-ignore-placement': true
+          },
+          paint: {
+            'text-color': '#ffffff'
+          }
+        },
+        // 4c. MAP LAYER: Category-stylized waypoint pins (unclustered individual points)
         {
           id: 'nitf-waypoints-icon',
           type: 'symbol',
           source: 'nitf-waypoints',
+          filter: ['!', ['has', 'point_count']],
           layout: {
             'icon-image': [
               'case',
@@ -337,18 +456,57 @@ onMounted(() => {
             'symbol-sort-key': ['case', ['==', ['get', 'isSelected'], true], 1, 0]
           }
         },
-        // 5. MAP LAYER: Waypoint Text Label
+        // 5a. MAP LAYER: Selected Waypoint Text Label (always visible when selected, high contrast)
+        {
+          id: 'nitf-waypoints-selected-label',
+          type: 'symbol',
+          source: 'nitf-waypoints',
+          filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'isSelected'], true]],
+          layout: {
+            'text-field': ['get', 'title'],
+            'text-font': ['Noto Sans Regular'],
+            'text-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              10, 11,
+              15, 12.5
+            ],
+            'text-offset': [0, 0.4],
+            'text-anchor': 'top',
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
+            'symbol-sort-key': 2
+          },
+          paint: {
+            'text-color': props.activeLayer === 'satellite' ? '#ffffff' : '#1b2e24',
+            'text-halo-color': props.activeLayer === 'satellite' ? '#061910' : '#fef9ed',
+            'text-halo-width': 2.5
+          }
+        },
+        // 5b. MAP LAYER: Waypoint Text Label (zoom-gated at zoom >= 12.8, de-duplicated without text overlap)
         {
           id: 'nitf-waypoints-label',
           type: 'symbol',
           source: 'nitf-waypoints',
+          minzoom: 12.8,
+          filter: ['all', ['!', ['has', 'point_count']], ['!=', ['get', 'isSelected'], true]],
           layout: {
             'text-field': ['get', 'title'],
             'text-font': ['Noto Sans Regular'],
-            'text-size': 11,
+            'text-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              12.8, 10,
+              15, 12
+            ],
             'text-offset': [0, 0.4],
             'text-anchor': 'top',
-            'text-allow-overlap': true
+            'text-allow-overlap': false,
+            'text-ignore-placement': false,
+            'text-optional': true,
+            'symbol-sort-key': 1
           },
           paint: {
             'text-color': props.activeLayer === 'satellite' ? '#ffffff' : '#1b2e24',
@@ -416,29 +574,81 @@ onMounted(() => {
     }
   })
 
+  map.on('click', 'nitf-waypoints-selected-label', (e) => {
+    const feature = e.features?.[0]
+    if (feature?.properties?.id) {
+      emit('select-waypoint', feature.properties.id)
+    }
+  })
+
+  // Cluster click: zoom in to expand the cluster
+  const handleClusterClick = async (e: any) => {
+    const features = map?.queryRenderedFeatures(e.point, {
+      layers: ['nitf-cluster-circle', 'nitf-cluster-count']
+    })
+    const feature = features?.[0]
+    if (!feature || !map) return
+    const clusterId = feature.properties?.cluster_id
+    const source = map.getSource('nitf-waypoints') as maplibregl.GeoJSONSource
+    if (source && clusterId != null) {
+      try {
+        const zoom = await source.getClusterExpansionZoom(clusterId)
+        if (!map) return
+        const coords = (feature.geometry as any).coordinates
+        map.stop()
+        map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+        map.easeTo({
+          center: coords,
+          zoom: Math.max(zoom || 13, 13),
+          duration: 600
+        })
+      } catch {
+        const coords = (feature.geometry as any).coordinates
+        map.stop()
+        map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+        map.easeTo({
+          center: coords,
+          zoom: 13,
+          duration: 600
+        })
+      }
+    }
+  }
+
+  map.on('click', 'nitf-cluster-circle', handleClusterClick)
+  map.on('click', 'nitf-cluster-count', handleClusterClick)
+
   // Canvas background click
   map.on('click', (e) => {
     const features = map?.queryRenderedFeatures(e.point, {
-      layers: ['nitf-waypoints-icon', 'nitf-waypoints-label', 'nitf-trailhead-icon']
+      layers: [
+        'nitf-waypoints-icon',
+        'nitf-waypoints-label',
+        'nitf-waypoints-selected-label',
+        'nitf-trailhead-icon',
+        'nitf-cluster-circle',
+        'nitf-cluster-count'
+      ]
     })
     if (!features || features.length === 0) {
       emit('map-click')
     }
   })
 
-  // Pointer cursor on hover over waypoint map layers
-  map.on('mouseenter', 'nitf-waypoints-icon', () => {
-    if (map) map.getCanvas().style.cursor = 'pointer'
-  })
-  map.on('mouseleave', 'nitf-waypoints-icon', () => {
-    if (map) map.getCanvas().style.cursor = ''
-  })
-  map.on('mouseenter', 'nitf-waypoints-label', () => {
-    if (map) map.getCanvas().style.cursor = 'pointer'
-  })
-  map.on('mouseleave', 'nitf-waypoints-label', () => {
-    if (map) map.getCanvas().style.cursor = ''
-  })
+  // Pointer cursor on hover over interactive map layers
+  const setPointer = () => { if (map) map.getCanvas().style.cursor = 'pointer' }
+  const resetPointer = () => { if (map) map.getCanvas().style.cursor = '' }
+
+  map.on('mouseenter', 'nitf-waypoints-icon', setPointer)
+  map.on('mouseleave', 'nitf-waypoints-icon', resetPointer)
+  map.on('mouseenter', 'nitf-waypoints-label', setPointer)
+  map.on('mouseleave', 'nitf-waypoints-label', resetPointer)
+  map.on('mouseenter', 'nitf-waypoints-selected-label', setPointer)
+  map.on('mouseleave', 'nitf-waypoints-selected-label', resetPointer)
+  map.on('mouseenter', 'nitf-cluster-circle', setPointer)
+  map.on('mouseleave', 'nitf-cluster-circle', resetPointer)
+  map.on('mouseenter', 'nitf-cluster-count', setPointer)
+  map.on('mouseleave', 'nitf-cluster-count', resetPointer)
 
   window.addEventListener('resize', handleResize)
   
@@ -447,6 +657,10 @@ onMounted(() => {
       map?.resize()
     }, 100)
   })
+
+  if (typeof window !== 'undefined') {
+    (window as any).__map = map
+  }
 })
 
 onBeforeUnmount(() => {
@@ -464,6 +678,12 @@ function setSourceData(id: string, data: any) {
 
 function updateMapLayersData() {
   if (!map) return
+  if (props.selectedId && props.trailhead && !props.trailhead.trailGeometry) {
+    const from = getSelectedCoords()
+    if (from) {
+      fetchDynamicHikingTrail(props.selectedId, from, [props.trailhead.lng, props.trailhead.lat])
+    }
+  }
   setSourceData('nitf-waypoints', buildWaypointsGeoJSON(props.waypoints, props.selectedId))
   setSourceData('nitf-user-location', buildUserLocationGeoJSON(props.userLocation))
   setSourceData('nitf-trailhead', buildTrailheadGeoJSON(props.trailhead))
@@ -472,20 +692,24 @@ function updateMapLayersData() {
 
 function flyToWaypoint(lng: number, lat: number) {
   if (!map) return
+  map.stop()
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
   map.flyTo({
     center: [lng, lat],
-    zoom: 13,
-    duration: 1400,
+    zoom: 13.5,
+    duration: 1200,
     essential: true
   })
 }
 
 function flyToCoordinates(lng: number, lat: number, zoom = 14) {
   if (!map) return
+  map.stop()
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
   map.flyTo({
     center: [lng, lat],
     zoom,
-    duration: 1400,
+    duration: 1200,
     essential: true
   })
 }
@@ -493,10 +717,14 @@ function flyToCoordinates(lng: number, lat: number, zoom = 14) {
 /**
  * Frames the given [lng, lat] points within the visible part of the map.
  * `padding` (px) reserves space for overlays such as the top console and the peek card.
- * A single point is flown to at the standard waypoint zoom; multiple points are fitted.
+ * A single point is flown to using viewport offset (preserving zero transform padding);
+ * multiple points are fitted via fitBounds.
  */
 function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadding>) {
   if (!map || points.length === 0) return
+  map.stop()
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+
   const pad: MapFocusPadding = { top: 0, bottom: 0, left: 0, right: 0, ...padding }
 
   // Never let padding exceed the canvas, or MapLibre refuses to fit
@@ -506,12 +734,22 @@ function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadd
   if (pad.left + pad.right > w - 40) pad.left = pad.right = Math.max(0, (w - 40) / 2)
   if (pad.top + pad.bottom > h - 40) {
     const scale = Math.max(0, h - 40) / (pad.top + pad.bottom)
-    pad.top *= scale
-    pad.bottom *= scale
+    pad.top = Math.round(pad.top * scale)
+    pad.bottom = Math.round(pad.bottom * scale)
   }
 
   if (points.length === 1) {
-    map.flyTo({ center: points[0], zoom: 13, padding: pad, duration: 1400, essential: true })
+    const offset: [number, number] = [
+      Math.round((pad.left - pad.right) / 2),
+      Math.round((pad.top - pad.bottom) / 2)
+    ]
+    map.flyTo({
+      center: points[0],
+      zoom: 13.5,
+      offset,
+      duration: 1200,
+      essential: true
+    })
     return
   }
 
@@ -519,7 +757,7 @@ function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadd
     (b, p) => b.extend(p),
     new maplibregl.LngLatBounds(points[0], points[0])
   )
-  map.fitBounds(bounds, { padding: pad, maxZoom: 15, duration: 1400, essential: true })
+  map.fitBounds(bounds, { padding: pad, maxZoom: 14.5, duration: 1200, essential: true })
 }
 
 function zoomIn() {
@@ -567,6 +805,10 @@ watch(() => props.activeLayer, (newLayer) => {
     map.setPaintProperty('nitf-waypoints-label', 'text-color', isSatellite ? '#ffffff' : '#1b2e24')
     map.setPaintProperty('nitf-waypoints-label', 'text-halo-color', isSatellite ? '#061910' : '#fef9ed')
   }
+  if (map.getLayer('nitf-waypoints-selected-label')) {
+    map.setPaintProperty('nitf-waypoints-selected-label', 'text-color', isSatellite ? '#ffffff' : '#1b2e24')
+    map.setPaintProperty('nitf-waypoints-selected-label', 'text-halo-color', isSatellite ? '#061910' : '#fef9ed')
+  }
   if (map.getLayer('nitf-trailhead-icon')) {
     map.setPaintProperty('nitf-trailhead-icon', 'text-color', isSatellite ? '#ffffff' : '#1f4f8f')
     map.setPaintProperty('nitf-trailhead-icon', 'text-halo-color', isSatellite ? '#061910' : '#fef9ed')
@@ -574,6 +816,9 @@ watch(() => props.activeLayer, (newLayer) => {
   if (map.getLayer('nitf-trailhead-link-label')) {
     map.setPaintProperty('nitf-trailhead-link-label', 'text-color', isSatellite ? '#ffffff' : '#0c1811')
     map.setPaintProperty('nitf-trailhead-link-label', 'text-halo-color', isSatellite ? '#0c1811' : '#ffffff')
+  }
+  if (map.getLayer('nitf-cluster-circle')) {
+    map.setPaintProperty('nitf-cluster-circle', 'circle-stroke-color', isSatellite ? '#ffffff' : '#fef9ed')
   }
 })
 

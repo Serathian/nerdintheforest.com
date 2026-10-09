@@ -135,7 +135,12 @@ const selectedNote = computed(() => {
 const selectedTrailhead = computed(() => {
   const note = fieldNotes.value.find(n => n.id === selectedNoteId.value)
   if (!note?.trailhead) return null
-  return { name: note.trailhead.name, lat: note.trailhead.latitude, lng: note.trailhead.longitude }
+  return {
+    name: note.trailhead.name,
+    lat: note.trailhead.latitude,
+    lng: note.trailhead.longitude,
+    trailGeometry: (note.trailhead as any).trailGeometry || null
+  }
 })
 
 const viewportRef = ref<HTMLElement | null>(null)
@@ -163,8 +168,16 @@ function focusSelection() {
   const note = fieldNotes.value.find(n => n.id === selectedNoteId.value)
   if (!note || note.longitude == null || note.latitude == null) return
   const points: Array<[number, number]> = [[note.longitude, note.latitude]]
-  if (selectedTrailhead.value) {
-    points.push([selectedTrailhead.value.lng, selectedTrailhead.value.lat])
+  const th = note.trailhead
+  if (th && th.latitude != null && th.longitude != null) {
+    points.push([th.longitude, th.latitude])
+    const geom = (th as any).trailGeometry
+    if (geom && geom.length > 2) {
+      const step = Math.max(1, Math.floor(geom.length / 5))
+      for (let i = step; i < geom.length; i += step) {
+        points.push(geom[i])
+      }
+    }
   }
   mapRef.value?.focusOn(points, getMapFocusPadding())
 }
@@ -311,33 +324,18 @@ function showNotification(msg: string) {
     <main ref="viewportRef" class="main-viewport">
       <!-- Topographic Map Canvas -->
       <ClientOnly>
-        <MapCanvas
-          ref="mapRef"
-          :waypoints="filteredWaypoints"
-          :selected-id="selectedNoteId"
-          :trailhead="selectedTrailhead"
-          :active-layer="activeLayer"
-          :user-location="userLocation"
-          @select-waypoint="handleSelectNote"
-        />
+        <MapCanvas ref="mapRef" :waypoints="filteredWaypoints" :selected-id="selectedNoteId"
+          :trailhead="selectedTrailhead" :active-layer="activeLayer" :user-location="userLocation"
+          @select-waypoint="handleSelectNote" />
       </ClientOnly>
 
       <!-- Map Controls (Zoom, Current Location, Layer Toggle) -->
-      <MapControls
-        :active-layer="activeLayer"
-        :is-locating="isLocating"
-        @zoom-in="handleZoomIn"
-        @zoom-out="handleZoomOut"
-        @locate="handleLocate"
-        @toggle-layer="handleToggleLayer"
-      />
+      <MapControls :active-layer="activeLayer" :is-locating="isLocating" @zoom-in="handleZoomIn"
+        @zoom-out="handleZoomOut" @locate="handleLocate" @toggle-layer="handleToggleLayer" />
 
       <!-- Live Toast Notification Banner -->
       <Transition name="fade">
-        <div
-          v-if="notificationMessage"
-          class="toast-notification font-mono"
-        >
+        <div v-if="notificationMessage" class="toast-notification font-mono">
           <span class="toast-dot">●</span>
           {{ notificationMessage }}
         </div>
@@ -345,51 +343,26 @@ function showNotification(msg: string) {
     </main>
 
     <!-- TWO-ZONE BOTTOM DRAWER (docked fixed at bottom: 64px) -->
-    <MobileDrawer
-      ref="drawerRef"
-      :field-notes="filteredFieldNotes"
-      :selected-id="selectedNoteId"
-      :search-query="searchQuery"
-      :active-category="activeCategory"
-      :active-filter-count="activeFilterCount"
-      @select-note="handleSelectNote"
-      @clear-selected="handleClearSelected"
-      @read-story="handleReadStory"
-      @navigate="(p) => {
+    <MobileDrawer ref="drawerRef" :field-notes="filteredFieldNotes" :selected-id="selectedNoteId"
+      :search-query="searchQuery" :active-category="activeCategory" :active-filter-count="activeFilterCount"
+      @select-note="handleSelectNote" @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
         selectedNoteId = p.id
         mapRef?.flyToWaypoint(p.lng, p.lat)
         showNotification('Opening maps to trailhead...')
-      }"
-      @open-filters="handleOpenFilters"
-      @update:search-query="(q) => searchQuery = q"
-      @select-category="handleSelectCategory"
-    />
+      }" @open-filters="handleOpenFilters" @update:search-query="(q) => searchQuery = q"
+      @select-category="handleSelectCategory" />
 
     <!-- STANDARDIZED DOSSIER SHEET MODAL -->
-    <DossierSheet
-      :note="selectedNote"
-      :is-open="isDossierOpen"
-      @close="isDossierOpen = false"
-      @read-story="handleReadStory"
-    />
+    <DossierSheet :note="selectedNote" :is-open="isDossierOpen" @close="isDossierOpen = false"
+      @read-story="handleReadStory" />
 
     <!-- DEDICATED EDITORIAL DISPATCH READER VIEW -->
-    <DispatchReader
-      :note="selectedNote"
-      :is-open="isReaderOpen"
-      @close="handleCloseReader"
-      @back-to-map="handleCloseReader"
-    />
+    <DispatchReader :note="selectedNote" :is-open="isReaderOpen" @close="handleCloseReader"
+      @back-to-map="handleCloseReader" />
 
     <!-- ACTIVE FILTER SHEET MODAL -->
-    <FilterModal
-      :is-open="isFilterOpen"
-      :active-filters="filters"
-      :matching-count="filteredFieldNotes.length"
-      @close="isFilterOpen = false"
-      @apply="handleApplyFilters"
-      @reset="handleResetFilters"
-    />
+    <FilterModal :is-open="isFilterOpen" :active-filters="filters" :matching-count="filteredFieldNotes.length"
+      @close="isFilterOpen = false" @apply="handleApplyFilters" @reset="handleResetFilters" />
   </div>
 </template>
 
@@ -404,7 +377,7 @@ function showNotification(msg: string) {
 .main-viewport {
   position: fixed;
   top: 0;
-  bottom: 64px;
+  bottom: 0;
   left: 0;
   right: 0;
   overflow: hidden;

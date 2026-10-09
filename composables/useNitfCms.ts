@@ -72,7 +72,14 @@ export function transformPostToFieldNote(post: CmsNitfPost, index: number): Tran
     longitude: post.longitude ?? 10.7167,
     elevation: post.elevation ?? 480,
     distanceKm: 1.5,
-    category: 'SHELTER'
+    category: 'SHELTER',
+    slug: post.slug || post.id,
+    date: 'OCT 04, 2026 // 06:40 CET',
+    readTime: '3 MIN READ',
+    weather: '4°C • MIST',
+    heroImage: '',
+    content: [post.excerpt || 'Backcountry field note.'],
+    gallery: []
   }
 }
 

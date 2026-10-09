@@ -15,15 +15,19 @@ interface Props {
   latitude?: number
   longitude?: number
   active?: boolean
+  hasTrailhead?: boolean
+  trailheadLat?: number
+  trailheadLng?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   description: '',
   visitedCount: 0,
-  dispatchCount: 1,
+  dispatchCount: 0,
   latitude: 60.2710,
   longitude: 10.7320,
-  active: false
+  active: false,
+  hasTrailhead: false
 })
 
 const emit = defineEmits<{
@@ -34,13 +38,16 @@ const emit = defineEmits<{
 }>()
 
 function handleNavigate() {
-  emit('navigate', { id: props.id, lat: props.latitude, lng: props.longitude })
+  if (!props.hasTrailhead) return
+  const destLat = props.trailheadLat ?? props.latitude
+  const destLng = props.trailheadLng ?? props.longitude
+  emit('navigate', { id: props.id, lat: destLat, lng: destLng })
   // Open external maps navigation from current location to trailhead
   if (typeof window !== 'undefined') {
     const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
     const url = isApple
-      ? `maps://maps.apple.com/?daddr=${props.latitude},${props.longitude}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${props.latitude},${props.longitude}`
+      ? `maps://maps.apple.com/?daddr=${destLat},${destLng}&dirflg=d`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`
     window.open(url, '_blank')
   }
 }
@@ -69,6 +76,12 @@ function handleNavigate() {
           <span class="material-symbols-outlined badge-icon">article</span>
           {{ dispatchCount }} {{ dispatchCount === 1 ? 'DISPATCH' : 'DISPATCHES' }}
         </span>
+        <span
+          v-else
+          class="dispatch-badge unvisited font-mono"
+        >
+          0 DISPATCHES
+        </span>
 
         <!-- Visited Status Badge -->
         <span
@@ -95,13 +108,19 @@ function handleNavigate() {
 
     <!-- Information Widgets (Lean-to, Firewood, Lake Water, Toilet, etc.) -->
     <div class="amenities-row">
-      <span
-        v-for="(amenity, idx) in amenities"
-        :key="idx"
-        class="amenity-widget font-mono"
-      >
-        <span class="material-symbols-outlined widget-icon">{{ amenity.icon }}</span>
-        <span>{{ amenity.label }}</span>
+      <template v-if="amenities && amenities.length > 0">
+        <span
+          v-for="(amenity, idx) in amenities"
+          :key="idx"
+          class="amenity-widget font-mono"
+        >
+          <span class="material-symbols-outlined widget-icon">{{ amenity.icon }}</span>
+          <span>{{ amenity.label }}</span>
+        </span>
+      </template>
+      <span v-else class="amenities-unverified font-mono">
+        <span class="material-symbols-outlined unverified-icon">pending</span>
+        <span>UNVERIFIED AMENITIES</span>
       </span>
     </div>
 
@@ -117,11 +136,12 @@ function handleNavigate() {
         <span>VIEW LOCATION</span>
       </button>
 
-      <!-- Navigate to Trailhead Button -->
+      <!-- Navigate to Trailhead Button (only shown when trailhead exists) -->
       <button
+        v-if="hasTrailhead"
         class="action-btn nav-btn font-mono"
         type="button"
-        title="Directions from current location"
+        title="Directions to trailhead"
         @click.stop="handleNavigate"
       >
         <span class="material-symbols-outlined btn-icon">directions</span>
@@ -312,6 +332,35 @@ function handleNavigate() {
 .nav-btn:hover {
   background-color: var(--color-surface-container-highest);
   border-color: var(--color-primary);
+}
+
+.nav-btn.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  background-color: var(--color-surface-container);
+  color: var(--color-lichen-slate);
+  border-color: rgba(115, 120, 116, 0.2);
+}
+
+.amenities-unverified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background-color: var(--color-surface-container-low);
+  border: 1px dashed rgba(115, 120, 116, 0.3);
+  color: var(--color-lichen-slate);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+.unverified-icon {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .action-btn:active {

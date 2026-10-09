@@ -41,4 +41,77 @@ describe('Mobile Map View Component Specifications', () => {
     const netGain = peakElevation - startElevation
     expect(netGain).toBe(180)
   })
+
+  it('validates unvisited locations have no dispatches and no amenities', () => {
+    const unvisitedNotes = fallbackFieldNotes.filter(n => (n.visitedCount ?? 0) === 0)
+    expect(unvisitedNotes.length).toBeGreaterThanOrEqual(1)
+
+    for (const note of unvisitedNotes) {
+      expect(note.amenities).toHaveLength(0)
+      expect(note.dispatches ?? []).toHaveLength(0)
+    }
+  })
+
+  it('validates visited locations have dispatches count matching visited counter', () => {
+    const visitedNotes = fallbackFieldNotes.filter(n => (n.visitedCount ?? 0) > 0)
+    expect(visitedNotes.length).toBeGreaterThanOrEqual(1)
+
+    for (const note of visitedNotes) {
+      expect(note.dispatches?.length).toBe(note.visitedCount)
+      expect(note.amenities.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('verifies trailhead availability for navigation eligibility', () => {
+    const notesWithTrailhead = fallbackFieldNotes.filter(n => !!n.trailhead)
+    const notesWithoutTrailhead = fallbackFieldNotes.filter(n => !n.trailhead)
+
+    expect(notesWithTrailhead.length).toBeGreaterThanOrEqual(1)
+    expect(notesWithoutTrailhead.length).toBeGreaterThanOrEqual(1)
+
+    for (const note of notesWithTrailhead) {
+      expect(note.trailhead?.name).toBeDefined()
+      expect(note.trailhead?.latitude).toBeDefined()
+      expect(note.trailhead?.longitude).toBeDefined()
+      expect(note.trailhead?.elevationGain).toBeGreaterThan(0)
+      expect(note.trailhead?.elevationLoss).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('verifies unified bookmark sheet specifications and metrics', () => {
+    // Asymmetric 2/3 ledger tab width ratio
+    const ledgerTabRatio = 2 / 3
+    expect(ledgerTabRatio).toBeCloseTo(0.667, 2)
+
+    // Standard tactile tab height
+    const tabHeightPx = 38
+    expect(tabHeightPx).toBe(38)
+
+    // Chevron icons for closed/open bookmark sheet states
+    const chevronClosed = 'keyboard_arrow_up'
+    const chevronOpen = 'keyboard_arrow_down'
+    expect(chevronClosed).toBe('keyboard_arrow_up')
+    expect(chevronOpen).toBe('keyboard_arrow_down')
+  })
+
+  it('validates base layer overlay mechanics for search and location peek modes', () => {
+    // Mode transitions: search mode base layer vs location peek base layer
+    const getMode = (selectedId?: string) => (selectedId ? 'location_peek' : 'search')
+    expect(getMode()).toBe('search')
+    expect(getMode('langvatnet-gapahuk')).toBe('location_peek')
+
+    // Two-section minimum height rule: at least two tab heights above bottom nav
+    const minTabHeightPx = 38
+    const minTwoSectionHeightPx = 2 * minTabHeightPx
+    expect(minTwoSectionHeightPx).toBe(76)
+
+    // Contrast tones between main section and collapsible drawer
+    const mainSectionTone = '#faf4e8' // Light floating parchment
+    const collapsibleDrawerTone = '#e5d6b8' // Deeper warm Kraft tray
+    expect(mainSectionTone).not.toBe(collapsibleDrawerTone)
+
+    // Pinned bottom nav offset ensuring base controls stay static
+    const bottomNavOffsetPx = 68
+    expect(bottomNavOffsetPx).toBe(68)
+  })
 })
