@@ -48,10 +48,10 @@ function close() {
       </div>
 
       <!-- ===================================================================== -->
-      <!-- SECTION 2: COLLAPSIBLE DRAWER SHEET (Tab at bottom; rises over main)  -->
+      <!-- SECTION 2: COLLAPSIBLE DRAWER SHEET (Tab in middle; rises over main)  -->
       <!-- ===================================================================== -->
       <div :class="['collapsible-drawer-sheet', { 'is-open': isOpen }]" :style="{ '--drawer-height': drawerHeight }">
-        <!-- Asymmetric 2/3 Ledger Tab Row -->
+        <!-- Asymmetric 2/3 Ledger Tab Row (Tier 2 in stack) -->
         <div class="tab-shelf-row">
           <button class="ledger-tab-btn font-mono" type="button" :aria-expanded="isOpen"
             :aria-label="isOpen ? `Collapse ${tabTitle}` : `Open ${tabTitle}`" @click.stop="toggle">
@@ -73,14 +73,16 @@ function close() {
           <div class="tab-right-shoulder" @click.stop="toggle" />
         </div>
 
-        <!-- Drawer Content Body (Revealed as sheet rises up from below) -->
+        <!-- Drawer Content Body: solid Kraft backing extending to bottom: 0 behind nav -->
         <div class="drawer-content-body">
-          <slot name="drawer" />
+          <div class="drawer-slot-wrapper">
+            <slot name="drawer" />
+          </div>
         </div>
       </div>
 
-      <!-- Spacer for 68px BottomNav -->
-      <div class="bottom-nav-dock-spacer" />
+      <!-- Dock tabs spacer: Height of all tabs below main section card (Tier 1 + Tier 2 = 94px) -->
+      <div class="dock-tabs-spacer" />
     </div>
   </div>
 </template>
@@ -88,13 +90,17 @@ function close() {
 <style scoped>
 .mobile-drawer-shell {
   position: static;
+  --tier1-nav-height: 60px;
+  --tier2-tab-height: 38px;
+  --tabs-stacked-height: calc(var(--tier1-nav-height) + var(--tier2-tab-height));
+  /* 94px */
 }
 
 /* Translucent backdrop behind drawer for outside dismiss */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 25;
+  z-index: 35;
   background: transparent;
   pointer-events: auto;
 }
@@ -109,7 +115,7 @@ function close() {
   opacity: 0;
 }
 
-/* Fixed Dock Container at bottom of viewport */
+/* Fixed Dock Container at bottom of viewport: sits behind BottomNav (z-index 40 vs 50) */
 .drawer-dock-container {
   position: fixed;
   left: 0;
@@ -124,18 +130,18 @@ function close() {
   box-sizing: border-box;
 }
 
-/* Spacer ensuring the main section and tab clear the 68px bottom nav */
-.bottom-nav-dock-spacer {
-  height: 68px;
+/* Spacer ensuring main-section-card sits exactly atop the stacked tabs (Tier 1 + Tier 2 = 94px) */
+.dock-tabs-spacer {
+  height: var(--tabs-stacked-height, 94px);
   width: 100%;
   pointer-events: none;
   flex-shrink: 0;
 }
 
 /* ========================================================================= */
-/* SECTION 1: MAIN SECTION                                                   */
+/* SECTION 1: MAIN SECTION (Tier 3 in stack)                                 */
 /* Clear contrast tone: Light Floating Parchment (#faf4e8)                   */
-/* Sits directly above the 38px tab shelf at rest                             */
+/* Sits directly above Tier 2 tab shelf at rest with zero gap                 */
 /* ========================================================================= */
 .main-section-card {
   width: 100%;
@@ -145,9 +151,10 @@ function close() {
   border-top: 1.5px solid rgba(115, 120, 116, 0.4);
   box-shadow: 0 -8px 24px rgba(27, 46, 36, 0.16);
   pointer-events: auto;
-  position: relative;
+  height: min-content;
+  position: absolute;
+  bottom: 0;
   z-index: 10;
-  /* Leaves room for the 38px tab shelf below it */
   box-sizing: border-box;
   overflow: hidden;
   transition: opacity 0.25s ease, box-shadow 0.3s ease;
@@ -156,25 +163,23 @@ function close() {
 .main-section-card::after {
   content: '';
   display: block;
-  left: 0;
-  bottom: 0;
-  height: 38px;
+  height: var(--tabs-stacked-height, 94px);
   width: 100%;
-  background-color: var(--color-floating-bg, #faf4e8);
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* ========================================================================= */
-/* SECTION 2: COLLAPSIBLE DRAWER SHEET                                       */
+/* SECTION 2: COLLAPSIBLE DRAWER SHEET (Tier 2 in stack)                     */
 /* Clear contrast tone: Deeper Warm Tactile Kraft (#e5d6b8)                  */
-/* Anchored at bottom: 0; rises up over main section on expand               */
+/* Anchored at bottom: 0 behind BottomNav; rises up over main section        */
 /* ========================================================================= */
 .collapsible-drawer-sheet {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 106px;
-  /* 38px tab + 68px BottomNav clearance when collapsed */
+  height: var(--tabs-stacked-height, 94px);
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -186,18 +191,19 @@ function close() {
   will-change: height;
 }
 
-/* When expanded, the drawer rises up from below over the main section */
+/* When expanded, the drawer rises up from behind the nav tabs and over the main section */
 .collapsible-drawer-sheet.is-open {
   height: var(--drawer-height, 388px);
   pointer-events: auto;
+  box-shadow: 0 -12px 32px rgba(6, 25, 16, 0.28);
 }
 
 /* ========================================================================= */
-/* ASYMMETRIC 2/3 LEDGER TAB ROW                                             */
+/* ASYMMETRIC 2/3 LEDGER TAB ROW (Tier 2 Tab)                                */
 /* ========================================================================= */
 .tab-shelf-row {
   width: 100%;
-  height: 38px;
+  height: var(--tier2-tab-height, 38px);
   display: flex;
   align-items: flex-end;
   position: relative;
@@ -303,6 +309,7 @@ function close() {
 
 /* ========================================================================= */
 /* DRAWER CONTENT BODY                                                       */
+/* Seamless continuation of Warm Kraft extending to bottom: 0 behind nav     */
 /* ========================================================================= */
 .drawer-content-body {
   width: 100%;
@@ -314,13 +321,19 @@ function close() {
   box-sizing: border-box;
   overflow: hidden;
   min-height: 0;
+}
+
+/* Slot content (cards/dispatches) only visible & interactive when open */
+.drawer-slot-wrapper {
+  width: 100%;
+  height: 100%;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.28s ease, visibility 0.28s;
 }
 
-.collapsible-drawer-sheet.is-open .drawer-content-body {
+.collapsible-drawer-sheet.is-open .drawer-slot-wrapper {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
