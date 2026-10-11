@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { mockAreas } from '~/data/mockNordicTrail'
 
 export interface FilterState {
   category: string // 'ALL' | 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'VIEWPOINT'
+  area: string // 'ALL' | 'pirkanmaa' | 'nordmarka'
   visitStatus: 'ALL' | 'VISITED' | 'UNVISITED'
   maxDistanceKm: number // 0 = any, 2, 5, 10
   amenities: string[]
@@ -23,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const localCategory = ref(props.activeFilters.category)
+const localArea = ref(props.activeFilters.area || 'ALL')
 const localVisitStatus = ref(props.activeFilters.visitStatus)
 const localMaxDistance = ref(props.activeFilters.maxDistanceKm)
 const localAmenities = ref<string[]>([...props.activeFilters.amenities])
@@ -33,6 +36,7 @@ watch(
   (open) => {
     if (open) {
       localCategory.value = props.activeFilters.category
+      localArea.value = props.activeFilters.area || 'ALL'
       localVisitStatus.value = props.activeFilters.visitStatus
       localMaxDistance.value = props.activeFilters.maxDistanceKm
       localAmenities.value = [...props.activeFilters.amenities]
@@ -47,6 +51,16 @@ const categories = [
   { id: 'SPRINGHEAD', label: 'Springs', icon: 'water_drop' },
   { id: 'VIEWPOINT', label: 'Viewpoints', icon: 'visibility' }
 ]
+
+const areas = computed(() => [
+  { id: 'ALL', label: 'All Areas', country: '', icon: 'public' },
+  ...mockAreas.map(a => ({
+    id: a.id,
+    label: a.name,
+    country: a.country,
+    icon: a.country === 'Finland' ? 'terrain' : 'forest'
+  }))
+])
 
 const visitStatuses: Array<{ id: 'ALL' | 'VISITED' | 'UNVISITED'; label: string; icon: string }> = [
   { id: 'ALL', label: 'All Stops', icon: 'all_inclusive' },
@@ -71,6 +85,7 @@ const availableAmenities = [
 const hasActiveFilters = computed(() => {
   return (
     localCategory.value !== 'ALL' ||
+    localArea.value !== 'ALL' ||
     localVisitStatus.value !== 'ALL' ||
     localMaxDistance.value !== 0 ||
     localAmenities.value.length > 0
@@ -88,6 +103,7 @@ function toggleAmenity(id: string) {
 
 function handleReset() {
   localCategory.value = 'ALL'
+  localArea.value = 'ALL'
   localVisitStatus.value = 'ALL'
   localMaxDistance.value = 0
   localAmenities.value = []
@@ -97,6 +113,7 @@ function handleReset() {
 function handleApply() {
   emit('apply', {
     category: localCategory.value,
+    area: localArea.value,
     visitStatus: localVisitStatus.value,
     maxDistanceKm: localMaxDistance.value,
     amenities: [...localAmenities.value]
@@ -187,7 +204,47 @@ function handleApply() {
             </div>
           </section>
 
-          <!-- 2. Visit Status (Refined Segmented Ledger Rail) -->
+          <!-- 2. Expedition Area (Regional Wilderness Territory) -->
+          <section class="filter-section">
+            <div class="section-header font-mono">
+              <span class="section-dot" />
+              <span class="section-title">Expedition Area</span>
+              <span class="section-line" />
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="area in areas"
+                :key="area.id"
+                :class="[
+                  'category-pill font-mono',
+                  localArea === area.id ? 'active' : ''
+                ]"
+                type="button"
+                @click="localArea = area.id"
+              >
+                <span
+                  v-if="localArea === area.id"
+                  class="active-dot"
+                />
+                <span
+                  class="material-symbols-outlined text-[14px]"
+                  :class="localArea === area.id ? 'text-secondary' : 'text-lichen-slate'"
+                >
+                  {{ area.icon }}
+                </span>
+                <span>{{ area.label }}</span>
+                <span
+                  v-if="area.country"
+                  class="area-badge-chip"
+                >
+                  {{ area.country }}
+                </span>
+              </button>
+            </div>
+          </section>
+
+          <!-- 3. Visit Status (Refined Segmented Ledger Rail) -->
           <section class="filter-section">
             <div class="section-header font-mono">
               <span class="section-dot" />
@@ -489,6 +546,21 @@ function handleApply() {
   height: 5px;
   border-radius: 9999px;
   background-color: var(--color-secondary);
+}
+
+.area-badge-chip {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: rgba(115, 120, 116, 0.15);
+  margin-left: 2px;
+}
+
+.category-pill.active .area-badge-chip {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fef9ed;
 }
 
 /* 2 & 3. Segmented Controls */

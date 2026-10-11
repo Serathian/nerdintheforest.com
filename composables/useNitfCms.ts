@@ -13,6 +13,8 @@ export interface CmsNitfPost {
   visited_count?: number
   amenities?: Array<string | { name?: string; icon?: string }>
   createdAt?: string
+  areaId?: string
+  area?: string
 }
 
 export interface CmsNitfWaypoint {
@@ -22,6 +24,8 @@ export interface CmsNitfWaypoint {
   latitude?: number
   longitude?: number
   elevation?: number
+  areaId?: string
+  area?: string
 }
 
 export type TransformedFieldNote = MockFieldNote
@@ -61,6 +65,8 @@ export function transformPostToFieldNote(post: CmsNitfPost, index: number): Tran
     id: post.id,
     numberTag,
     title: post.title || 'Untitled Dispatch',
+    areaId: post.areaId || 'nordmarka',
+    area: post.area || 'Nordmarka',
     description: post.excerpt || 'Tactile backcountry survey note from the Nordic field.',
     timeAgo: post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent',
     visitedCount: post.visited_count ?? 1,

@@ -66,6 +66,7 @@ function copyShareUrl() {
             <div class="reader-hero-overlay" />
             <div class="reader-hero-stamp font-mono">
               <span>[{{ note.latitude.toFixed(4) }}°N • {{ note.longitude.toFixed(4) }}°E]</span>
+              <span v-if="note.area">• {{ note.area }}</span>
               <span v-if="note.elevation">• {{ note.elevation }}M ELEV</span>
             </div>
           </div>

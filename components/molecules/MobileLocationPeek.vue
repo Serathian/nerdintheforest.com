@@ -25,6 +25,11 @@ const emit = defineEmits<{
           {{ location.numberTag }}
         </span>
 
+        <span v-if="location.area" class="area-badge font-mono">
+          <span class="material-symbols-outlined area-icon">public</span>
+          {{ location.area }}
+        </span>
+
         <span v-if="(location.visitedCount ?? 0) > 0" class="visited-badge visited font-mono">
           <span class="material-symbols-outlined check-icon">check_circle</span>
           VISITED {{ location.visitedCount }}x
@@ -143,6 +148,25 @@ const emit = defineEmits<{
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.area-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background-color: rgba(217, 83, 30, 0.1);
+  color: var(--color-secondary);
+  border: 1px solid rgba(217, 83, 30, 0.3);
+}
+
+.area-icon {
+  font-size: 11px;
 }
 
 .visited-badge {

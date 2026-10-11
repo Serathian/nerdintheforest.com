@@ -23,7 +23,7 @@ const emit = defineEmits<{
     <!-- Horizontal Snapping Card Carousel -->
     <div v-if="fieldNotes.length > 0" class="locations-carousel">
       <RecentCard v-for="note in fieldNotes" :key="note.id" :id="note.id" :number-tag="note.numberTag"
-        :title="note.title" :description="note.description" :visited-count="note.visitedCount"
+        :title="note.title" :area="note.area" :description="note.description" :visited-count="note.visitedCount"
         :dispatch-count="note.visitedCount && note.visitedCount > 0 ? (note.dispatches?.length ?? note.visitedCount) : 0"
         :amenities="note.amenities" :latitude="note.latitude" :longitude="note.longitude"
         :has-trailhead="!!note.trailhead" :trailhead-lat="note.trailhead?.latitude"

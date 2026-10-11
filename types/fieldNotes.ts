@@ -1,3 +1,12 @@
+export interface Area {
+  id: string
+  name: string
+  country: string
+  description?: string
+  center?: [number, number]
+  zoom?: number
+}
+
 export interface AmenityItem {
   icon: string
   label: string
@@ -28,6 +37,8 @@ export interface FieldNote {
   id: string
   numberTag: string
   title: string
+  areaId?: string
+  area?: string
   description?: string
   timeAgo?: string
   visitedCount?: number
@@ -51,3 +62,4 @@ export interface FieldNote {
   dispatches?: LinkedDispatch[]
   trailhead?: Trailhead
 }
+

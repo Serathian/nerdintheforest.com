@@ -10,6 +10,8 @@ interface Waypoint {
   title: string
   lat: number
   lng: number
+  areaId?: string
+  area?: string
   region?: string
   type?: string
 }
@@ -88,6 +90,9 @@ function buildWaypointsGeoJSON(waypoints: Waypoint[], selectedId?: string) {
         id: wp.id,
         title: wp.title,
         type: (wp.type || 'shelter').toLowerCase(),
+        areaId: wp.areaId,
+        area: wp.area,
+        region: wp.region || wp.area,
         isSelected: wp.id === selectedId
       },
       geometry: {

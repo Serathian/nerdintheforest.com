@@ -69,7 +69,7 @@ onUnmounted(() => {
       <div v-if="!isSearchOpen" class="search-pill" @click="toggleSearch">
         <span class="material-symbols-outlined search-icon">search</span>
         <span class="search-label">
-          {{ searchQuery ? searchQuery : 'Search locations, coordinates...' }}
+          {{ searchQuery ? searchQuery : 'Search locations, areas, coordinates...' }}
         </span>
       </div>
 
@@ -77,7 +77,7 @@ onUnmounted(() => {
         <span class="material-symbols-outlined search-icon">search</span>
         <input
           :value="searchQuery"
-          placeholder="Search locations, coordinates..."
+          placeholder="Search locations, areas, coordinates..."
           autofocus
           class="search-field"
           @input="handleSearchInput"

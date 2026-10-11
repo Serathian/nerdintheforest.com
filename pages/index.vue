@@ -29,6 +29,7 @@ const notificationMessage = ref<string | null>(null)
 
 const filters = ref<FilterState>({
   category: 'ALL',
+  area: 'ALL',
   visitStatus: 'ALL',
   maxDistanceKm: 0,
   amenities: []
@@ -78,6 +79,7 @@ onUnmounted(() => {
 const activeFilterCount = computed(() => {
   let count = 0
   if (filters.value.category !== 'ALL' || activeCategory.value !== 'ALL') count++
+  if (filters.value.area !== 'ALL') count++
   if (filters.value.visitStatus !== 'ALL') count++
   if (filters.value.maxDistanceKm > 0) count++
   if (filters.value.amenities.length > 0) count += filters.value.amenities.length
@@ -91,15 +93,26 @@ const filteredFieldNotes = computed(() => {
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase().trim()
       const matchesTitle = note.title.toLowerCase().includes(q)
-      const matchesDesc = note.description.toLowerCase().includes(q)
+      const matchesDesc = (note.description || '').toLowerCase().includes(q)
       const matchesTag = note.numberTag.toLowerCase().includes(q)
-      const matchesFeature = note.footerFeature.toLowerCase().includes(q)
-      if (!matchesTitle && !matchesDesc && !matchesTag && !matchesFeature) {
+      const matchesFeature = (note.footerFeature || '').toLowerCase().includes(q)
+      const matchesArea = (note.area || '').toLowerCase().includes(q) || (note.areaId || '').toLowerCase().includes(q)
+      if (!matchesTitle && !matchesDesc && !matchesTag && !matchesFeature && !matchesArea) {
         return false
       }
     }
 
-    // 2. Category Filter (either quick category or modal filter)
+    // 2. Area Filter
+    if (filters.value.area && filters.value.area !== 'ALL') {
+      const targetArea = filters.value.area.toLowerCase()
+      const noteAreaId = (note.areaId || '').toLowerCase()
+      const noteArea = (note.area || '').toLowerCase()
+      if (noteAreaId !== targetArea && noteArea !== targetArea) {
+        return false
+      }
+    }
+
+    // 3. Category Filter (either quick category or modal filter)
     const effectiveCategory = filters.value.category !== 'ALL' ? filters.value.category : activeCategory.value
     if (effectiveCategory !== 'ALL') {
       const noteCat = note.category || ''
@@ -108,7 +121,7 @@ const filteredFieldNotes = computed(() => {
       if (!match) return false
     }
 
-    // 3. Visit Status
+    // 4. Visit Status
     if (filters.value.visitStatus === 'VISITED' && (note.visitedCount ?? 0) <= 0) {
       return false
     }
@@ -116,7 +129,7 @@ const filteredFieldNotes = computed(() => {
       return false
     }
 
-    // 4. Max Distance
+    // 5. Max Distance
     if (filters.value.maxDistanceKm > 0) {
       const dist = note.distanceKm ?? 1.5
       if (dist > filters.value.maxDistanceKm) {
@@ -124,7 +137,7 @@ const filteredFieldNotes = computed(() => {
       }
     }
 
-    // 5. Amenities
+    // 6. Amenities
     if (filters.value.amenities.length > 0) {
       const noteAmenityLabels = note.amenities.map(a => a.label.toLowerCase())
       for (const required of filters.value.amenities) {
@@ -238,14 +251,31 @@ function handleOpenFilters() {
 }
 
 function handleApplyFilters(newFilters: FilterState) {
+  const previousArea = filters.value.area
   filters.value = { ...newFilters }
   activeCategory.value = newFilters.category
   showNotification(`Filters applied: ${filteredFieldNotes.value.length} discoveries found`)
+
+  if (newFilters.area !== previousArea) {
+    nextTick(() => {
+      const targetNotes = filteredFieldNotes.value
+      if (targetNotes.length > 0) {
+        const points = targetNotes
+          .filter(n => n.longitude != null && n.latitude != null)
+          .map(n => [n.longitude!, n.latitude!] as [number, number])
+        if (points.length > 0) {
+          mapRef.value?.focusOn(points, getMapFocusPadding())
+        }
+      }
+    })
+  }
 }
 
 function handleResetFilters() {
+  const previousArea = filters.value.area
   filters.value = {
     category: 'ALL',
+    area: 'ALL',
     visitStatus: 'ALL',
     maxDistanceKm: 0,
     amenities: []
@@ -253,6 +283,17 @@ function handleResetFilters() {
   activeCategory.value = 'ALL'
   searchQuery.value = ''
   showNotification('Filters reset to default')
+
+  if (previousArea !== 'ALL') {
+    nextTick(() => {
+      const allPoints = fieldNotes.value
+        .filter(n => n.longitude != null && n.latitude != null)
+        .map(n => [n.longitude!, n.latitude!] as [number, number])
+      if (allPoints.length > 0) {
+        mapRef.value?.focusOn(allPoints, getMapFocusPadding())
+      }
+    })
+  }
 }
 
 function handleToggleLayer() {

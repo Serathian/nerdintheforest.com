@@ -25,7 +25,7 @@ describe('Mobile Map View Component Specifications', () => {
     expect(testNote.amenities.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('verifies filter criteria matching for categories and distance', () => {
+  it('verifies filter criteria matching for categories, distance, and areas', () => {
     const shelterNotes = fallbackFieldNotes.filter(n => n.category === 'SHELTER')
     expect(shelterNotes.length).toBeGreaterThanOrEqual(1)
 
@@ -34,6 +34,19 @@ describe('Mobile Map View Component Specifications', () => {
 
     const visitedNotes = fallbackFieldNotes.filter(n => (n.visitedCount ?? 0) > 0)
     expect(visitedNotes.length).toBeGreaterThanOrEqual(3)
+
+    // Area filtering
+    const pirkanmaaNotes = fallbackFieldNotes.filter(n => n.areaId === 'pirkanmaa')
+    expect(pirkanmaaNotes.length).toBeGreaterThanOrEqual(2)
+    for (const note of pirkanmaaNotes) {
+      expect(note.area).toBe('Pirkanmaa')
+    }
+
+    const nordmarkaNotes = fallbackFieldNotes.filter(n => n.areaId === 'nordmarka')
+    expect(nordmarkaNotes.length).toBeGreaterThanOrEqual(4)
+    for (const note of nordmarkaNotes) {
+      expect(note.area).toBe('Nordmarka')
+    }
   })
 
   it('verifies elevation profile telemetry calculation', () => {

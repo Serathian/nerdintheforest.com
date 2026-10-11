@@ -10,6 +10,8 @@ interface FieldNote {
   id: string
   numberTag: string
   title: string
+  areaId?: string
+  area?: string
   description: string
   timeAgo: string
   visitedCount?: number
@@ -71,6 +73,13 @@ function handleNavigateTrailhead() {
           <div class="flex items-center gap-2">
             <span class="font-label-sm text-[10px] font-mono text-secondary font-bold uppercase tracking-wider">
               {{ note.numberTag }}
+            </span>
+            <span
+              v-if="note.area"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-label-sm text-[9px] font-mono font-bold uppercase bg-secondary/10 text-secondary border border-secondary/30"
+            >
+              <span class="material-symbols-outlined text-[10px]">public</span>
+              {{ note.area }}
             </span>
             <span
               v-if="(note.visitedCount ?? 0) > 0"

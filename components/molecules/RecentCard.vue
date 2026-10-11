@@ -8,6 +8,7 @@ interface Props {
   id: string
   numberTag: string
   title: string
+  area?: string
   description?: string
   visitedCount?: number
   dispatchCount?: number
@@ -21,6 +22,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  area: '',
   description: '',
   visitedCount: 0,
   dispatchCount: 0,
@@ -63,9 +65,14 @@ function handleNavigate() {
   >
     <!-- Card Top Header: Tag & Badges -->
     <div class="card-top-row">
-      <span class="card-tag font-mono">
-        {{ numberTag }}
-      </span>
+      <div class="flex items-center gap-1.5 min-w-0">
+        <span class="card-tag font-mono shrink-0">
+          {{ numberTag }}
+        </span>
+        <span v-if="area" class="card-area-badge font-mono truncate" :title="area">
+          {{ area }}
+        </span>
+      </div>
 
       <div class="badges-group">
         <!-- Dispatches Count Badge -->
@@ -196,6 +203,20 @@ function handleNavigate() {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.card-area-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background-color: rgba(217, 83, 30, 0.1);
+  color: var(--color-secondary);
+  border: 1px solid rgba(217, 83, 30, 0.25);
 }
 
 .badges-group {
