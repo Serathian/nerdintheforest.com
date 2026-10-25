@@ -45,6 +45,8 @@ export interface MockFieldNote {
   latitude: number
   longitude: number
   elevation: number
+  shelterCapacity?: number
+  tentSpaces?: number
   elevationGain?: number
   elevationLoss?: number
   distanceKm: number
@@ -1355,15 +1357,22 @@ export const mockLocations: Location[] = mockFieldNotes.map(note => {
     }
   }
 
+  const cat = note.category.toLowerCase() as LocationCategory
+  const hasShelterAmenity = amenityList.includes('timber_shelter') || cat === 'shelter'
+  const defaultShelterCapacity = note.shelterCapacity ?? (hasShelterAmenity ? 4 : 0)
+  const defaultTentSpaces = note.tentSpaces ?? (cat === 'shelter' ? 3 : cat === 'hearth' ? 2 : cat === 'trailhead' ? 0 : 1)
+
   return {
     id: note.id,
     slug: note.slug,
     name: note.title,
     area: note.areaId,
-    category: note.category.toLowerCase() as LocationCategory,
+    category: cat,
     latitude: note.latitude,
     longitude: note.longitude,
     elevation: note.elevation,
+    shelterCapacity: defaultShelterCapacity,
+    tentSpaces: defaultTentSpaces,
     summary: note.description,
     amenities: amenityList,
     trailhead: trailheadLoc,

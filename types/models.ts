@@ -73,6 +73,8 @@ export interface Location {
   latitude: number
   longitude: number
   elevation?: number       // in meters (e.g. 501)
+  shelterCapacity?: number // number of people who fit inside the shelter (0 if none)
+  tentSpaces?: number      // number of tent pitching spaces available
   summary?: string         // brief 2-sentence description for cards/drawers
   amenities: LocationAmenity[]
   /**

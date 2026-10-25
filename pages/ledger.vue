@@ -119,8 +119,8 @@ function closeDispatch() {
           <!-- Card Thumbnail Hero -->
           <div v-if="note.heroImage" class="card-hero-wrap">
             <img :src="note.heroImage" :alt="note.title" class="card-hero-img" loading="lazy" />
-            <div class="hero-overlay-tag font-mono">
-              {{ note.numberTag }}
+            <div v-if="note.area" class="hero-overlay-tag font-mono">
+              {{ note.area }}
             </div>
           </div>
 
@@ -154,8 +154,11 @@ function closeDispatch() {
 
             <!-- Footer Action -->
             <div class="card-footer">
-              <span class="coord-tag font-mono">
-                [{{ note.latitude?.toFixed(2) }}°N • {{ note.longitude?.toFixed(2) }}°E]
+              <span v-if="note.elevation" class="coord-tag font-mono">
+                {{ note.elevation }}m ELEV
+              </span>
+              <span v-else-if="note.area" class="coord-tag font-mono">
+                {{ note.area.toUpperCase() }}
               </span>
               <span class="read-action font-mono">
                 READ DISPATCH <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>

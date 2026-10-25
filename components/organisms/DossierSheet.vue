@@ -69,16 +69,20 @@ function handleNavigateTrailhead() {
       <div class="dossier-sheet">
         <!-- Top Drag Handle & Close Header -->
         <div class="dossier-header">
-          <div class="flex items-center gap-2">
-            <span class="font-label-sm text-[10px] font-mono text-secondary font-bold uppercase tracking-wider">
-              {{ note.numberTag }}
-            </span>
+          <div class="flex items-center flex-wrap gap-1.5">
             <span
               v-if="note.area"
               class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-label-sm text-[9px] font-mono font-bold uppercase bg-secondary/10 text-secondary border border-secondary/30"
             >
               <span class="material-symbols-outlined text-[10px]">public</span>
               {{ note.area }}
+            </span>
+            <span
+              v-if="note.elevation"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-label-sm text-[9px] font-mono font-bold bg-surface-container text-primary border border-outline/30"
+            >
+              <span class="material-symbols-outlined text-[10px] text-secondary">terrain</span>
+              {{ note.elevation }}m
             </span>
             <span
               v-if="(note.visitedCount ?? 0) > 0"
@@ -107,26 +111,13 @@ function handleNavigateTrailhead() {
 
         <!-- Scrollable Dossier Body -->
         <div class="overflow-y-auto px-4 py-3 flex flex-col gap-3.5 scrollbar-none flex-1">
-          <!-- Title & Sector -->
-          <div>
-            <div class="flex items-baseline justify-between gap-2">
-              <h1 class="font-headline-md text-[22px] leading-tight text-primary font-medium tracking-tight font-serif">
-                {{ note.title }}
-              </h1>
-              <span class="font-label-sm text-[10px] font-mono text-on-surface-variant/70 shrink-0">
-                {{ note.timeAgo }}
-              </span>
-            </div>
-            <p class="font-label-sm text-[10px] font-mono text-lichen-slate uppercase tracking-wider mt-0.5">
-              SECTOR // BLÅVANN NW • NORWEGIAN BOREAL HIGHLANDS
-            </p>
-          </div>
-
-          <!-- Coordinate Stamp -->
-          <div class="flex items-center gap-2">
-            <CoordinateStamp :lat="lat" :lng="lng" />
-            <span class="font-label-sm text-[10px] font-mono text-on-surface-variant/60">
-              TAP GPS TO COPY
+          <!-- Title -->
+          <div class="flex items-baseline justify-between gap-2">
+            <h1 class="font-headline-md text-[22px] leading-tight text-primary font-medium tracking-tight font-serif">
+              {{ note.title }}
+            </h1>
+            <span class="font-label-sm text-[10px] font-mono text-on-surface-variant/70 shrink-0">
+              {{ note.timeAgo }}
             </span>
           </div>
 

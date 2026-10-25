@@ -42,6 +42,8 @@ export interface FieldNote {
   latitude?: number
   longitude?: number
   elevation?: number
+  shelterCapacity?: number
+  tentSpaces?: number
   elevationGain?: number
   elevationLoss?: number
   distanceKm?: number

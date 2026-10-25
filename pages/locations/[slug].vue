@@ -57,7 +57,26 @@ const photoArchive = computed(() => {
 })
 
 const activePhotoIndex = ref<number | null>(null)
+const photoGalleryRef = ref<HTMLElement | null>(null)
 const shareNotification = ref<string | null>(null)
+
+function scrollPhotoGallery(direction: 'prev' | 'next') {
+  const el = photoGalleryRef.value
+  if (!el) return
+  const cardWidth = el.querySelector('.photo-card')?.clientWidth || 320
+  const scrollAmount = (cardWidth + 16) * (direction === 'next' ? 1 : -1)
+  el.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+}
+
+function stepLightboxPhoto(direction: 'prev' | 'next') {
+  if (activePhotoIndex.value === null || photoArchive.value.length === 0) return
+  const total = photoArchive.value.length
+  if (direction === 'next') {
+    activePhotoIndex.value = (activePhotoIndex.value + 1) % total
+  } else {
+    activePhotoIndex.value = (activePhotoIndex.value - 1 + total) % total
+  }
+}
 
 function copyShareUrl() {
   if (typeof window !== 'undefined') {
@@ -184,26 +203,18 @@ useHead({
         <div class="hero-media-wrapper">
           <img :src="coverImageUrl" :alt="currentLocation.name" class="hero-image" />
           <div class="hero-overlay" />
-
-          <!-- Surveyor Telemetry Overlay Stamp -->
-          <div class="hero-telemetry-stamp font-mono">
-            <span class="stamp-pill">
-              {{ formatCoordinates(currentLocation.latitude, currentLocation.longitude) }}
-            </span>
-            <span v-if="currentLocation.elevation" class="stamp-pill">
-              {{ currentLocation.elevation }}M ELEV
-            </span>
-            <span class="stamp-pill bg-primary/80">
-              {{ areaName.toUpperCase() }}
-            </span>
-          </div>
         </div>
 
         <!-- Hero Header Card -->
         <div class="hero-content-card">
           <div class="tag-row font-mono">
-            <span class="category-tag">
-              #{{ (currentLocation.category || 'SHELTER').toUpperCase() }}
+            <span class="area-tag">
+              <span class="material-symbols-outlined text-[13px]">public</span>
+              {{ areaName.toUpperCase() }}
+            </span>
+            <span v-if="currentLocation.elevation" class="elev-tag">
+              <span class="material-symbols-outlined text-[13px] text-secondary">terrain</span>
+              {{ currentLocation.elevation }}m
             </span>
             <span v-if="visitData.isVisited" class="visit-tag visited">
               <span class="material-symbols-outlined text-[13px]">check_circle</span>
@@ -242,11 +253,44 @@ useHead({
 
       <!-- Grid: Telemetry Specs & Verified Amenities -->
       <section class="dossier-grid">
-        <!-- Verified Amenities Panel -->
+        <!-- Verified Amenities & Capacity Panel -->
         <div class="dossier-panel amenities-panel">
           <div class="panel-header font-mono">
             <span class="material-symbols-outlined panel-icon">verified</span>
-            <h2>VERIFIED SITE AMENITIES</h2>
+            <h2>SITE CAPACITY & VERIFIED AMENITIES</h2>
+          </div>
+
+          <!-- Bivouac & Shelter Capacity Readout -->
+          <div class="capacity-stats-grid font-mono">
+            <div class="capacity-stat-box">
+              <div class="capacity-icon-wrap">
+                <span class="material-symbols-outlined">cabin</span>
+              </div>
+              <div class="capacity-stat-info">
+                <span class="capacity-label">SHELTER CAPACITY</span>
+                <span class="capacity-value">
+                  {{ (currentLocation.shelterCapacity ?? 0) > 0
+                    ? `${currentLocation.shelterCapacity} ${currentLocation.shelterCapacity === 1 ? 'PERSON' : 'PEOPLE'}`
+                    : 'NO SHELTER' }}
+                </span>
+              </div>
+            </div>
+
+            <div class="capacity-stat-box">
+              <div class="capacity-icon-wrap">
+                <span class="material-symbols-outlined">camping</span>
+              </div>
+              <div class="capacity-stat-info">
+                <span class="capacity-label">TENT SPACES</span>
+                <span class="capacity-value">
+                  {{ currentLocation.tentSpaces != null
+                    ? (currentLocation.tentSpaces > 0
+                      ? `${currentLocation.tentSpaces} ${currentLocation.tentSpaces === 1 ? 'TENT' : 'TENTS'}`
+                      : 'NONE')
+                    : 'UNSURVEYED' }}
+                </span>
+              </div>
+            </div>
           </div>
 
           <div v-if="currentLocation.amenities && currentLocation.amenities.length > 0" class="amenities-list">
@@ -312,9 +356,28 @@ useHead({
             <span class="material-symbols-outlined text-secondary">photo_camera</span>
             <h2>SURVEY PHOTO ARCHIVE ({{ photoArchive.length }})</h2>
           </div>
+
+          <div v-if="photoArchive.length > 1" class="gallery-controls">
+            <button
+              class="gallery-nav-btn"
+              type="button"
+              aria-label="Scroll photos left"
+              @click="scrollPhotoGallery('prev')"
+            >
+              <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+            </button>
+            <button
+              class="gallery-nav-btn"
+              type="button"
+              aria-label="Scroll photos right"
+              @click="scrollPhotoGallery('next')"
+            >
+              <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+            </button>
+          </div>
         </div>
 
-        <div v-if="photoArchive.length > 0" class="photo-grid">
+        <div v-if="photoArchive.length > 0" ref="photoGalleryRef" class="photo-gallery-track">
           <div v-for="(photo, idx) in photoArchive" :key="idx" class="photo-card" @click="activePhotoIndex = idx">
             <div class="photo-img-wrapper">
               <img :src="photo.url" :alt="photo.alt" loading="lazy" class="photo-img" />
@@ -427,20 +490,43 @@ useHead({
           <span class="material-symbols-outlined">close</span>
         </button>
 
+        <button
+          v-if="photoArchive.length > 1"
+          class="lightbox-nav-btn prev"
+          type="button"
+          aria-label="Previous photo"
+          @click.stop="stepLightboxPhoto('prev')"
+        >
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+
         <div class="lightbox-content" @click.stop>
           <img :src="photoArchive[activePhotoIndex].url" :alt="photoArchive[activePhotoIndex].alt"
             class="lightbox-image" />
           <div class="lightbox-caption font-mono">
             <p class="caption-text font-serif">{{ photoArchive[activePhotoIndex].caption ||
               photoArchive[activePhotoIndex].alt }}</p>
-            <span class="caption-sub">{{ photoArchive[activePhotoIndex].dispatchTitle }} • {{
-              photoArchive[activePhotoIndex].publishedAt ? new
-                Date(photoArchive[activePhotoIndex].publishedAt).toLocaleDateString('en-US', {
-                  month: 'short', year:
-                    'numeric'
-                }) : 'Field Survey' }}</span>
+            <div class="caption-sub-row">
+              <span class="caption-sub">{{ photoArchive[activePhotoIndex].dispatchTitle }} • {{
+                photoArchive[activePhotoIndex].publishedAt ? new
+                  Date(photoArchive[activePhotoIndex].publishedAt).toLocaleDateString('en-US', {
+                    month: 'short', year:
+                      'numeric'
+                  }) : 'Field Survey' }}</span>
+              <span class="caption-sub">{{ activePhotoIndex + 1 }} / {{ photoArchive.length }}</span>
+            </div>
           </div>
         </div>
+
+        <button
+          v-if="photoArchive.length > 1"
+          class="lightbox-nav-btn next"
+          type="button"
+          aria-label="Next photo"
+          @click.stop="stepLightboxPhoto('next')"
+        >
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
       </div>
     </Teleport>
   </div>
@@ -606,15 +692,37 @@ useHead({
 .tag-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.category-tag {
-  font-size: 11px;
-  font-weight: 600;
+.area-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background-color: rgba(217, 83, 30, 0.1);
   color: var(--color-secondary, #d9531e);
+  border: 1px solid rgba(217, 83, 30, 0.3);
   letter-spacing: 0.05em;
+}
+
+.elev-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background-color: var(--color-surface-container, #eedfc5);
+  color: var(--color-primary, #1b2e24);
+  border: 1px solid rgba(115, 120, 116, 0.35);
+  letter-spacing: 0.04em;
 }
 
 .visit-tag {
@@ -746,6 +854,62 @@ useHead({
   color: var(--color-secondary, #d9531e);
 }
 
+.capacity-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--color-outline-variant, #c2c8c2);
+}
+
+.capacity-stat-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background-color: var(--color-surface-container-low, #f7f0e2);
+  border: 1px solid rgba(115, 120, 116, 0.28);
+}
+
+.capacity-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  background-color: rgba(217, 83, 30, 0.12);
+  color: var(--color-secondary, #d9531e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.capacity-icon-wrap .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.capacity-stat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.capacity-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-tertiary, #526056);
+}
+
+.capacity-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--color-primary, #1b2e24);
+}
+
 .amenities-list {
   display: flex;
   flex-direction: column;
@@ -831,7 +995,7 @@ useHead({
 
 .section-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--color-outline-variant, #c2c8c2);
   padding-bottom: 8px;
@@ -845,31 +1009,81 @@ useHead({
   color: var(--color-primary, #1b2e24);
 }
 
-.photo-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+.gallery-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gallery-nav-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-container-low, #f8f3e7);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  border-radius: 4px;
+  color: var(--color-primary, #1b2e24);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gallery-nav-btn:hover {
+  background-color: var(--color-surface-container, #f3ede1);
+  border-color: var(--color-secondary, #d9531e);
+  color: var(--color-secondary, #d9531e);
+}
+
+.photo-gallery-track {
+  display: flex;
   gap: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-outline-variant, #c2c8c2) transparent;
 }
 
-@media (min-width: 640px) {
-  .photo-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.photo-gallery-track::-webkit-scrollbar {
+  height: 6px;
 }
 
-@media (min-width: 1024px) {
-  .photo-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+.photo-gallery-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.photo-gallery-track::-webkit-scrollbar-thumb {
+  background-color: var(--color-outline-variant, #c2c8c2);
+  border-radius: 999px;
 }
 
 .photo-card {
+  flex: 0 0 82%;
+  max-width: 340px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
   background-color: var(--color-surface-container-lowest, #ffffff);
   border: 1px solid var(--color-outline-variant, #c2c8c2);
   border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .photo-card {
+    flex: 0 0 310px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .photo-card {
+    flex: 0 0 330px;
+  }
 }
 
 .photo-card:hover {
@@ -1134,9 +1348,46 @@ useHead({
   margin-bottom: 4px;
 }
 
+.caption-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .caption-sub {
   font-size: 11px;
   opacity: 0.7;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(254, 249, 237, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lightbox-nav-btn:hover {
+  background: rgba(217, 83, 30, 0.85);
+  border-color: #d9531e;
+}
+
+.lightbox-nav-btn.prev {
+  left: 20px;
+}
+
+.lightbox-nav-btn.next {
+  right: 20px;
 }
 
 /* TOAST */

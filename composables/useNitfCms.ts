@@ -183,17 +183,35 @@ export function transformCmsLocation(doc: any): Location {
     ? doc.cover_image.url
     : undefined
 
+  const cat = (doc.category || 'shelter') as LocationCategory
+  const amenitiesArr: LocationAmenity[] = Array.isArray(doc.amenities) ? doc.amenities : []
+  const hasShelter = amenitiesArr.includes('timber_shelter') || cat === 'shelter'
+  const defaultShelterCap = hasShelter ? 4 : 0
+  const defaultTentSpaces = cat === 'shelter' ? 3 : cat === 'hearth' ? 2 : cat === 'trailhead' ? 0 : 1
+
   return {
     id: doc.slug || String(doc.id),
     slug: doc.slug || String(doc.id),
     name: doc.name || 'Survey Waypoint',
     area: areaId,
-    category: (doc.category || 'shelter') as LocationCategory,
+    category: cat,
     latitude: Number(doc.latitude),
     longitude: Number(doc.longitude),
     elevation: doc.elevation != null ? Number(doc.elevation) : undefined,
+    shelterCapacity:
+      doc.shelter_capacity != null
+        ? Number(doc.shelter_capacity)
+        : doc.shelterCapacity != null
+          ? Number(doc.shelterCapacity)
+          : (matchedMockNote?.shelterCapacity ?? defaultShelterCap),
+    tentSpaces:
+      doc.tent_spaces != null
+        ? Number(doc.tent_spaces)
+        : doc.tentSpaces != null
+          ? Number(doc.tentSpaces)
+          : (matchedMockNote?.tentSpaces ?? defaultTentSpaces),
     summary: doc.summary || '',
-    amenities: Array.isArray(doc.amenities) ? doc.amenities : [],
+    amenities: amenitiesArr,
     trailhead: trailheadLoc || (doc.trailhead ? String(doc.trailhead) : undefined),
     trailGeometry: resolvedTrailGeometry,
     elevationGain: doc.elevation_gain != null ? Number(doc.elevation_gain) : undefined,
@@ -326,6 +344,8 @@ export function transformLocationToFieldNote(
     latitude: loc.latitude,
     longitude: loc.longitude,
     elevation: loc.elevation || 0,
+    shelterCapacity: loc.shelterCapacity,
+    tentSpaces: loc.tentSpaces,
     elevationGain: loc.elevationGain,
     elevationLoss: loc.elevationLoss,
     distanceKm: 1.5,

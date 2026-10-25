@@ -21,13 +21,14 @@ const emit = defineEmits<{
     <!-- Location Header Bar -->
     <div class="peek-header-row">
       <div class="tag-badges-group">
-        <span class="location-tag font-mono">
-          {{ location.numberTag }}
-        </span>
-
         <span v-if="location.area" class="area-badge font-mono">
           <span class="material-symbols-outlined area-icon">public</span>
           {{ location.area }}
+        </span>
+
+        <span v-if="location.elevation" class="elevation-badge font-mono">
+          <span class="material-symbols-outlined elev-icon">terrain</span>
+          {{ location.elevation }}m
         </span>
 
         <span v-if="(location.visitedCount ?? 0) > 0" class="visited-badge visited font-mono">
@@ -52,21 +53,11 @@ const emit = defineEmits<{
       </button>
     </div>
 
-    <!-- Location Title & Coordinates / Elevation Stamp -->
+    <!-- Location Title -->
     <div class="title-meta-group">
       <h2 class="location-title font-serif">
         {{ location.title }}
       </h2>
-      <div class="location-coords-row font-mono">
-        <span class="coords-stamp">
-          [{{ (location.latitude ?? 60.271).toFixed(3) }}°N • {{ (location.longitude ??
-            10.732).toFixed(3) }}°E]
-        </span>
-        <span v-if="location.elevation" class="coords-divider">•</span>
-        <span v-if="location.elevation" class="elevation-stamp">
-          {{ location.elevation }}M ELEV
-        </span>
-      </div>
     </div>
 
     <!-- Amenities Widgets (Lean-to, Firewood, Lake Water, Toilet, etc.) -->
@@ -148,15 +139,8 @@ const emit = defineEmits<{
 .tag-badges-group {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.location-tag {
-  font-size: 10px;
-  color: var(--color-secondary);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .area-badge {
@@ -176,6 +160,25 @@ const emit = defineEmits<{
 
 .area-icon {
   font-size: 11px;
+}
+
+.elevation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background-color: var(--color-surface-container);
+  color: var(--color-primary);
+  border: 1px solid rgba(115, 120, 116, 0.35);
+}
+
+.elev-icon {
+  font-size: 11px;
+  color: var(--color-secondary);
 }
 
 .visited-badge {
