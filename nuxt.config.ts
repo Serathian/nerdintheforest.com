@@ -4,6 +4,10 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   telemetry: false,
 
+  devServer: {
+    port: 3003
+  },
+
   app: {
     head: {
       title: 'Nerd in the Forest — Nordic Cartography & Field Notes',
@@ -43,8 +47,9 @@ export default defineNuxtConfig({
   ],
 
   runtimeConfig: {
+    cmsApiInternal: process.env.CMS_API_INTERNAL || 'http://localhost:3000/api',
     public: {
-      cmsApiBase: process.env.NUXT_PUBLIC_CMS_API_BASE || 'https://cms.jake-reddy.com/api'
+      cmsApiBase: process.env.NUXT_PUBLIC_CMS_API_BASE || '/api/cms'
     }
   }
 })

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { FieldNote, LinkedDispatch } from '../../types/fieldNotes'
+import type { Dispatch } from '~/types/models'
 import MobileDrawerContainer from '../molecules/MobileDrawerContainer.vue'
 import MobileSearchSection from '../molecules/MobileSearchSection.vue'
 import MobileRecentLocationsCarousel from '../molecules/MobileRecentLocationsCarousel.vue'
 import MobileLocationPeek from '../molecules/MobileLocationPeek.vue'
 import MobileDispatchesTrack from '../molecules/MobileDispatchesTrack.vue'
+import MobileDispatchInspectionPeek from '../molecules/MobileDispatchInspectionPeek.vue'
 
 interface Props {
   fieldNotes: FieldNote[]
@@ -13,13 +15,17 @@ interface Props {
   searchQuery?: string
   activeCategory?: string
   activeFilterCount?: number
+  activeDispatch?: Dispatch | null
+  inspectedWaypoints?: any[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   selectedId: '',
   searchQuery: '',
   activeCategory: 'ALL',
-  activeFilterCount: 0
+  activeFilterCount: 0,
+  activeDispatch: null,
+  inspectedWaypoints: () => []
 })
 
 const emit = defineEmits<{
@@ -30,6 +36,7 @@ const emit = defineEmits<{
   (e: 'open-filters'): void
   (e: 'update:searchQuery', query: string): void
   (e: 'select-category', category: string): void
+  (e: 'exit-inspection'): void
 }>()
 
 // 2 CORE BASE LAYER MODES:
@@ -139,12 +146,29 @@ function handleNavigate(note: FieldNote) {
 <template>
   <div class="mobile-drawer-root">
     <!-- ======================================================================= -->
+    <!-- SCENARIO C: DISPATCH INSPECTION MODE                                    -->
+    <!-- Renders dedicated sequential timeline tray for the active dispatch     -->
+    <!-- ======================================================================= -->
+    <div v-if="activeDispatch" class="inspection-dock-container">
+      <div class="inspection-dock-card">
+        <MobileDispatchInspectionPeek
+          :dispatch="activeDispatch"
+          :waypoints="inspectedWaypoints"
+          :selected-location-id="selectedId"
+          @select-waypoint="(id) => emit('select-note', id)"
+          @exit="emit('exit-inspection')"
+          @read-dispatch="(slug) => emit('read-story', slug)"
+        />
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
     <!-- SCENARIO A: SEARCH MODE                                                 -->
     <!-- #main: Search & Filter section (always visible, light parchment)        -->
     <!-- #drawer: Recently updated locations carousel (tactile Kraft tray)       -->
     <!-- ======================================================================= -->
     <MobileDrawerContainer
-      v-if="viewMode !== 'location_peek'"
+      v-else-if="viewMode !== 'location_peek'"
       v-model:isOpen="isRecentLocationsOpen"
       tab-title="RECENTLY UPDATED"
       tab-icon="layers"
@@ -207,5 +231,31 @@ function handleNavigate(note: FieldNote) {
 <style scoped>
 .mobile-drawer-root {
   position: static;
+}
+
+.inspection-dock-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 40;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.inspection-dock-card {
+  width: 100%;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  background-color: var(--color-floating-bg, #faf4e8);
+  border-top: 1.5px solid rgba(115, 120, 116, 0.4);
+  box-shadow: 0 -8px 24px rgba(27, 46, 36, 0.2);
+  pointer-events: auto;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-bottom: 68px; /* Seamless continuation all the way to bottom edge of viewport behind BottomNav */
 }
 </style>

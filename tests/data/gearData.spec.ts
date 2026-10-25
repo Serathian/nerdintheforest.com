@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { mockLoadoutKits, mockGearInsights } from '../../data/mockGearData'
+import {
+  mockLoadoutKits,
+  mockGearInsights,
+  mockGearItems,
+  mockGearReviews,
+  mockLoadouts
+} from '../../data/mockGearData'
 
 describe('Gear Ledger Data Specifications', () => {
   it('validates seasonal loadout kits structure', () => {
@@ -19,7 +25,7 @@ describe('Gear Ledger Data Specifications', () => {
           expect(item.name).toBeTruthy()
           expect(item.weightGrams).toBeGreaterThan(0)
           expect(item.spec).toBeTruthy()
-          expect(['PACKED', 'ESSENTIAL', 'READY']).toContain(item.status)
+          expect(['PACKED', 'ESSENTIAL', 'READY', 'WORN']).toContain(item.status)
         }
       }
     }
@@ -66,4 +72,40 @@ describe('Gear Ledger Data Specifications', () => {
       expect(index).toBe(expectedIndices[i])
     })
   })
+
+  it('validates normalized core gear models (mockGearItems, mockGearReviews, mockLoadouts)', () => {
+    // 1. Master Gear Items Catalog
+    expect(mockGearItems.length).toBeGreaterThanOrEqual(10)
+    for (const item of mockGearItems) {
+      expect(item.id).toBeTruthy()
+      expect(item.name).toBeTruthy()
+      expect(item.brand).toBeTruthy()
+      expect(item.weightGrams).toBeGreaterThan(0)
+      expect(item.category).toBeTruthy()
+    }
+
+    // 2. Simplified Gear Reviews (linking to gear items)
+    expect(mockGearReviews.length).toBeGreaterThanOrEqual(6)
+    for (const review of mockGearReviews) {
+      expect(review.id).toBeTruthy()
+      expect(review.title).toBeTruthy()
+      expect(review.gearItem).toBeDefined()
+      expect(review.keyTakeaways.length).toBeGreaterThanOrEqual(3)
+      expect(review.verdict).toBeTruthy()
+    }
+
+    // 3. Loadouts (clean without terrain, computing weights dynamically)
+    expect(mockLoadouts.length).toBe(4)
+    for (const loadout of mockLoadouts) {
+      expect(loadout.id).toBeTruthy()
+      expect(loadout.title).toBeTruthy()
+      expect(loadout.season).toBeTruthy()
+      expect(loadout.items.length).toBeGreaterThan(0)
+      for (const entry of loadout.items) {
+        expect(entry.item).toBeDefined()
+        expect(['packed', 'essential', 'worn', 'consumable']).toContain(entry.status)
+      }
+    }
+  })
 })
+

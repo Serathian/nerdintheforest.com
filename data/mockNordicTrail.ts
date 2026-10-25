@@ -1,7 +1,7 @@
 import { HIKING_TRAIL_GEOMETRIES } from './mockHikingTrails'
-import type { Area } from '../types/fieldNotes'
+import type { Area, Location, Dispatch, LocationCategory, LocationAmenity } from '../types/models'
 
-export { type Area }
+export { type Area, type Location, type Dispatch }
 
 export interface AmenityItem {
   icon: string
@@ -533,6 +533,52 @@ export const mockFieldNotes: MockFieldNote[] = [
     ]
   },
   {
+    id: 'note-kikut',
+    slug: 'kikut-peak',
+    numberTag: '#12 VIEWPOINT',
+    title: 'Kikut Peak (604m)',
+    areaId: 'nordmarka',
+    area: 'Nordmarka',
+    description: 'Panoramic granite vantage rising to 604m commanding sweeping views over Lake Bjørnsjøen and the deep Nordmarka old-growth spruce canopy.',
+    timeAgo: 'Recent',
+    date: 'OCT 12, 2026 // 14:30 CET',
+    readTime: '3 MIN READ',
+    weather: '6°C • CRISP • GUSTS 5 M/S',
+    heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'visibility', label: 'Lake View' },
+      { icon: 'forest', label: 'Old Spruce' }
+    ],
+    footerFeature: 'Peak 604m',
+    footerIcon: 'landscape',
+    metrics: '604m • 5.2km',
+    latitude: 60.0880,
+    longitude: 10.6550,
+    elevation: 604,
+    distanceKm: 5.2,
+    category: 'VIEWPOINT',
+    content: [
+      'Kikut Peak provides one of the most commanding panoramic vistas in all of Nordmarka. Looking north from the granite ledge, Bjørnsjøen stretches out like dark glass between pine-carpeted ridges.',
+      'The trail ascends past historic forestry paths, climbing through blueberry and lichen undergrowth up to the wind-buffeted high bedrock mark.'
+    ],
+    gallery: [
+      { url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80', caption: 'Nordmarka forest canopy overlooking Lake Bjørnsjøen from Kikut' }
+    ],
+    dispatches: [
+      {
+        id: 'dispatch-kikut-1',
+        slug: 'kikut-traverse',
+        title: 'Autumn Ascent to Kikut Peak & Katnosa Traverse',
+        date: 'OCT 12, 2026 // 14:30 CET',
+        readTime: '4 MIN READ',
+        excerpt: 'Challenging high-ridge traverse connecting Langvatnet gapahuk with the panoramic granite summit of Kikut Peak.',
+        weather: '6°C • CRISP • GUSTS 5 M/S',
+        heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
     id: 'note-fi-1',
     slug: 'helvetinkolu-gapahuk',
     numberTag: '#21 SHELTER',
@@ -738,6 +784,264 @@ export const mockFieldNotes: MockFieldNote[] = [
         heroImage: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80'
       }
     ]
+  },
+  {
+    id: 'note-fi-5',
+    slug: 'vaha-riutta-laavu',
+    numberTag: '#25 SHELTER',
+    title: 'Vähä-Riutan laavu',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Suosittu ja tilava hirsirakenteinen tuplalaavu ja kota Iso-Riutan ja Vähä-Riutan järvien välisellä kannaksella Birgitan polun varrella Lempäälässä. Uimalaituri, nuotiopaikka ja puuvaja.',
+    timeAgo: 'Oct 04',
+    date: 'OCT 04, 2026 // 06:40 EET',
+    readTime: '3 MIN READ',
+    weather: '2°C • CALM • BARO 1022 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'cabin', label: 'Timber Shelter' },
+      { icon: 'outdoor_grill', label: 'Stone Hearth' },
+      { icon: 'forest', label: 'Dry Wood' },
+      { icon: 'visibility', label: 'Lake View' },
+      { icon: 'water_drop', label: 'Lake Water' }
+    ],
+    footerFeature: 'Lakeside isthmus',
+    footerIcon: 'cabin',
+    metrics: '138m • 1.2km',
+    latitude: 61.4045,
+    longitude: 23.9085,
+    elevation: 138,
+    distanceKm: 1.2,
+    category: 'SHELTER',
+    content: [
+      'Overnight solo camp at the Vähä-Riutta double lean-to nestled between Iso-Riutta and Vähä-Riutta lakes along Birgitan polku in Lempäälä.'
+    ],
+    gallery: [
+      { url: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80', caption: 'Vähä-Riutan laavu beside calm autumn lake' }
+    ],
+    dispatches: [
+      {
+        id: 'dispatch-fi-5',
+        slug: 'autumn-night-vaha-riutta',
+        title: 'Autumn Night at Vähä-Riutan Laavu',
+        date: 'OCT 04, 2026 // 06:40 EET',
+        readTime: '3 MIN READ',
+        excerpt: 'Overnight solo camp at the Vähä-Riutta double lean-to nestled between Iso-Riutta and Vähä-Riutta lakes along Birgitan polku in Lempäälä.',
+        weather: '2°C • CALM • BARO 1022 HPA',
+        heroImage: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
+    id: 'savontie-trailhead',
+    slug: 'savontie-trailhead',
+    numberTag: '#26 TRAILHEAD',
+    title: 'Savontie P-alue (Birgitan polku)',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Pysäköintialue Savontien varrella Lempäälässä. Päälähtöpiste Birgitan polulle kohti Vähä-Riutan ja Vähä-Kauas laavuja.',
+    timeAgo: 'Oct 10',
+    date: 'OCT 10, 2026 // 09:15 EET',
+    readTime: '2 MIN READ',
+    weather: '4°C • CRISP AUTUMN • BARO 1024 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'forest', label: 'Dry Wood' },
+      { icon: 'directions_car', label: 'Parking' }
+    ],
+    footerFeature: 'Trailhead Gate',
+    footerIcon: 'directions_car',
+    metrics: '125m • 0.0km',
+    latitude: 61.3980,
+    longitude: 23.8920,
+    elevation: 125,
+    distanceKm: 0.0,
+    category: 'SHELTER',
+    content: ['Pysäköintialue Savontien varrella Lempäälässä. Päälähtöpiste Birgitan polulle kohti Vähä-Riutan ja Vähä-Kauas laavuja.'],
+    gallery: [],
+    dispatches: [
+      {
+        id: 'dispatch-birgitan-polku',
+        slug: 'birgitan-polku-circuit',
+        title: 'Birgitan Polku Lake Circuit & Ridge Traverse',
+        date: 'OCT 10, 2026 // 09:15 EET',
+        readTime: '3 MIN READ',
+        excerpt: 'Three-stage autumn trek beginning at Savontie trailhead.',
+        weather: '4°C • CRISP AUTUMN',
+        heroImage: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
+    id: 'vaha-kauas-laavu',
+    slug: 'vaha-kauas-laavu',
+    numberTag: '#27 SHELTER',
+    title: 'Vähä-Kauas laavu',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Rauhallinen rantalaavu ja kamiinalla varustettu laavukota Vähä-Kausjärven itärannalla Birgitan polun erämaisella osuudella Lempäälässä. Rantanuotiopaikka ja kuivakäymälä.',
+    timeAgo: 'Oct 10',
+    date: 'OCT 10, 2026 // 12:45 EET',
+    readTime: '3 MIN READ',
+    weather: '4°C • CRISP AUTUMN • BARO 1024 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'cabin', label: 'Timber Shelter' },
+      { icon: 'outdoor_grill', label: 'Stone Hearth' },
+      { icon: 'forest', label: 'Dry Wood' },
+      { icon: 'visibility', label: 'Lake View' },
+      { icon: 'water_drop', label: 'Lake Water' }
+    ],
+    footerFeature: 'Lakeside kota',
+    footerIcon: 'cabin',
+    metrics: '132m • 4.8km',
+    latitude: 61.3665,
+    longitude: 23.9246,
+    elevation: 132,
+    distanceKm: 4.8,
+    category: 'SHELTER',
+    content: ['Rauhallinen rantalaavu ja kamiinalla varustettu laavukota Vähä-Kausjärven itärannalla Birgitan polun erämaisella osuudella Lempäälässä.'],
+    gallery: [],
+    dispatches: [
+      {
+        id: 'dispatch-birgitan-polku',
+        slug: 'birgitan-polku-circuit',
+        title: 'Birgitan Polku Lake Circuit & Ridge Traverse',
+        date: 'OCT 10, 2026 // 09:15 EET',
+        readTime: '3 MIN READ',
+        excerpt: 'Three-stage autumn trek beginning at Savontie trailhead.',
+        weather: '4°C • CRISP AUTUMN',
+        heroImage: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
+    id: 'kankimaki-trailhead',
+    slug: 'kankimaki-trailhead',
+    numberTag: '#28 TRAILHEAD',
+    title: 'Kankimäki P-alue (Helvetinjärvi)',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Pääportti ja taukokeskus Helvetinjärven kansallispuistoon Ruovedellä. Lähtöpiste polulle kohti Helvetinkolun murroslaaksoa.',
+    timeAgo: 'Oct 15',
+    date: 'OCT 15, 2026 // 08:00 EET',
+    readTime: '2 MIN READ',
+    weather: '5°C • MIST & SPRUCE CANOPY • BARO 1018 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'forest', label: 'Dry Wood' },
+      { icon: 'directions_car', label: 'Parking' }
+    ],
+    footerFeature: 'National park gate',
+    footerIcon: 'directions_car',
+    metrics: '180m • 0.0km',
+    latitude: 62.0380,
+    longitude: 23.8320,
+    elevation: 180,
+    distanceKm: 0.0,
+    category: 'SHELTER',
+    content: ['Pääportti ja taukokeskus Helvetinjärven kansallispuistoon Ruovedellä.'],
+    gallery: [],
+    dispatches: [
+      {
+        id: 'dispatch-helvetinjarvi-traverse',
+        slug: 'helvetinjarvi-taiga-traverse',
+        title: 'Helvetinjärvi & Pirkanmaa Grand Taiga Traverse',
+        date: 'OCT 15, 2026 // 08:00 EET',
+        readTime: '4 MIN READ',
+        excerpt: 'Comprehensive five-point expedition in Helvetinjärvi.',
+        weather: '5°C • MIST',
+        heroImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
+    id: 'pirunkirkko-nakoalapaikka',
+    slug: 'pirunkirkko-nakoalapaikka',
+    numberTag: '#29 VIEWPOINT',
+    title: 'Pirunkirkko näköalapaikka',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Karun kaunis kalliomaisema ja siirtolohkareluola Helvetinjärven jyrkänteillä.',
+    timeAgo: 'Oct 15',
+    date: 'OCT 15, 2026 // 11:30 EET',
+    readTime: '3 MIN READ',
+    weather: '5°C • MIST & SPRUCE CANOPY • BARO 1018 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'visibility', label: 'Lake View' },
+      { icon: 'landscape', label: 'Granite Cleft' }
+    ],
+    footerFeature: 'Precipice Vista',
+    footerIcon: 'landscape',
+    metrics: '195m • 3.2km',
+    latitude: 61.9960,
+    longitude: 23.8120,
+    elevation: 195,
+    distanceKm: 3.2,
+    category: 'VIEWPOINT',
+    content: ['Karun kaunis kalliomaisema ja siirtolohkareluola Helvetinjärven jyrkänteillä.'],
+    gallery: [],
+    dispatches: [
+      {
+        id: 'dispatch-helvetinjarvi-traverse',
+        slug: 'helvetinjarvi-taiga-traverse',
+        title: 'Helvetinjärvi & Pirkanmaa Grand Taiga Traverse',
+        date: 'OCT 15, 2026 // 08:00 EET',
+        readTime: '4 MIN READ',
+        excerpt: 'Comprehensive five-point expedition in Helvetinjärvi.',
+        weather: '5°C • MIST',
+        heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
+  },
+  {
+    id: 'kirskaanniemi-laavu',
+    slug: 'kirskaanniemi-laavu',
+    numberTag: '#30 SHELTER',
+    title: 'Kirskaanniemi laavu',
+    areaId: 'pirkanmaa',
+    area: 'Pirkanmaa',
+    description: 'Kaunis kallioinen niemenkärki ja useampi laavu Höytämönjärven rannalla Birgitan polun reitistöllä.',
+    timeAgo: 'Oct 15',
+    date: 'OCT 15, 2026 // 16:40 EET',
+    readTime: '3 MIN READ',
+    weather: '5°C • MIST & SPRUCE CANOPY • BARO 1018 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80',
+    visitedCount: 1,
+    amenities: [
+      { icon: 'cabin', label: 'Timber Shelter' },
+      { icon: 'outdoor_grill', label: 'Stone Hearth' },
+      { icon: 'forest', label: 'Dry Wood' },
+      { icon: 'visibility', label: 'Lake View' }
+    ],
+    footerFeature: 'Peninsula Point',
+    footerIcon: 'cabin',
+    metrics: '115m • 6.4km',
+    latitude: 61.4079,
+    longitude: 23.7745,
+    elevation: 115,
+    distanceKm: 6.4,
+    category: 'SHELTER',
+    content: ['Kaunis kallioinen niemenkärki ja useampi laavu Höytämönjärven rannalla Birgitan polun reitistöllä.'],
+    gallery: [],
+    dispatches: [
+      {
+        id: 'dispatch-helvetinjarvi-traverse',
+        slug: 'helvetinjarvi-taiga-traverse',
+        title: 'Helvetinjärvi & Pirkanmaa Grand Taiga Traverse',
+        date: 'OCT 15, 2026 // 08:00 EET',
+        readTime: '4 MIN READ',
+        excerpt: 'Comprehensive five-point expedition in Helvetinjärvi.',
+        weather: '5°C • MIST',
+        heroImage: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80'
+      }
+    ]
   }
 ]
 
@@ -751,4 +1055,328 @@ export const mockMapWaypoints: MockMapWaypoint[] = mockFieldNotes.map(note => ({
   area: note.area,
   region: note.area
 }))
+
+// =============================================================================
+// NORMALIZED DISPATCHES (nitf_dispatches)
+// =============================================================================
+export const mockDispatches: Dispatch[] = [
+  {
+    id: 'dispatch-1',
+    slug: 'langvatnet-gapahuk',
+    title: 'Autumn Frost & Morning Mist at Langvatnet',
+    publishedAt: '2026-10-04T06:40:00Z',
+    status: 'published',
+    locations: ['note-1', 'note-3'],
+    excerpt: 'Hand-hewn timber lean-to with double spruce log notch joints perched on the sheltered south-east cove of Langvatnet, followed by a fast hike past Korsbekken rapids.',
+    weather: '4°C • MIST • BARO 1018 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-1-1',
+        image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+        location: 'note-1',
+        caption: 'Spruce timber gapahuk sheltered beneath granite ridge pines'
+      },
+      {
+        id: 'gal-1-2',
+        image: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=1200&q=80',
+        location: 'note-3',
+        caption: 'Cold peat-filtered brook tumbling across mossy granite stones at Korsbekken'
+      },
+      {
+        id: 'gal-1-3',
+        image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+        caption: 'Autumn taiga canopy veiled in morning mist'
+      }
+    ],
+    content: [
+      'The morning mist rose in slow, deliberate wisps across the calm mirror surface of Langvatnet. Arriving at the south-eastern cove just past first light, the scent of damp moss, resinous pine needles, and cold granite was everywhere.',
+      'The gapahuk itself is a masterwork of local craftsmanship: double-scribed whole spruce trunks interlocked at the corners with axe-hewn notch joinery. Inside, the floorboards are bone dry, lifted thirty centimeters above the damp forest floor on granite footing stones.',
+      'A weathered wooden timber crate on the leeward wall was stacked to the brim with split silver birch logs. After lighting a small kettle fire on the granite hearth stones, the water boiled in under six minutes.',
+      'Following the ridge trail northward, we crossed the crystalline rapids of Korsbekken to replenish our field flasks with icy mineral water.'
+    ]
+  },
+  {
+    id: 'dispatch-2',
+    slug: 'langvatnet-midsummer',
+    title: 'Midsummer Solstice Camp & Birch Carving',
+    publishedAt: '2026-06-21T22:30:00Z',
+    status: 'published',
+    locations: ['note-1'],
+    excerpt: 'Long twilight hours at the gapahuk. Carving butter knives from green birch limbs by the lakeshore campfire.',
+    weather: '16°C • GOLDEN DUSK • CALM',
+    heroImage: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+    gallery: [
+      {
+        id: 'gal-2-1',
+        image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+        location: 'note-1',
+        caption: 'Late evening golden hour light filtering through the birch canopy'
+      }
+    ],
+    content: [
+      'Twilight that never fades into true darkness. Sitting on the smooth granite shelf as the water turned lilac and rose pink.'
+    ]
+  },
+  {
+    id: 'dispatch-fi-3-1',
+    slug: 'seitseminen-pitkajarvi',
+    title: 'Glacial Spring Water & Ancient Scots Pine Bogs',
+    publishedAt: '2026-09-29T14:00:00Z',
+    status: 'published',
+    locations: ['note-fi-3', 'note-fi-4'],
+    excerpt: 'Sub-surface spring bubbling through Seitsemisharju moraine into a granite pool near Pitkäjärvi, followed by the southern ridge overlook.',
+    weather: '8°C • CRISP • WIND 3 M/S',
+    heroImage: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-3-1',
+        image: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=1200&q=80',
+        location: 'note-fi-3',
+        caption: 'Pure sub-surface spring bubbling into granite stone basin'
+      },
+      {
+        id: 'gal-3-2',
+        image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80',
+        location: 'note-fi-4',
+        caption: 'Bedrock overlook across southern Pirkanmaa lakes'
+      }
+    ],
+    content: [
+      'Water bubbling up from deep sandy glacial moraine into a pristine stone basin at the edge of the Seitsemisharju ridge. Crystal clear at 4.6°C year-round.'
+    ]
+  },
+  {
+    id: 'dispatch-fi-3-2',
+    slug: 'seitseminen-multiharju',
+    title: 'Primeval Taiga Canopy Patrol',
+    publishedAt: '2026-08-14T11:30:00Z',
+    status: 'published',
+    locations: ['note-fi-3'],
+    excerpt: 'Surveying 300-year-old pine stands of Multiharju ridge before descending to the springhead.',
+    weather: '18°C • WARM SUN',
+    heroImage: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+    content: [
+      'Surveying 300-year-old pine stands of Multiharju ridge before descending to the springhead.'
+    ]
+  },
+  {
+    id: 'dispatch-fi-4',
+    slug: 'hervantajarvi-kallio-vista',
+    title: 'Sunset Over the Waters of Southern Pirkanmaa',
+    publishedAt: '2026-09-21T18:20:00Z',
+    status: 'published',
+    locations: ['note-fi-4'],
+    excerpt: 'Rocky ridge ascent overlooking mirror waters and Scots pines of the Hervantajärvi nature trail.',
+    weather: '10°C • GOLDEN HOUR',
+    heroImage: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80',
+    content: [
+      'The trail ascends through dense bilberry undergrowth onto a polished bedrock outcrop. From the rocky ledge, the view opens southward over Hervantajärvi.'
+    ]
+  },
+  {
+    id: 'dispatch-kikut',
+    slug: 'kikut-traverse',
+    title: 'Autumn Ascent to Kikut Peak & Katnosa Traverse',
+    publishedAt: '2026-10-12T14:30:00Z',
+    status: 'published',
+    locations: ['langvatnet-gapahuk', 'kikut-peak'],
+    excerpt: 'Challenging high-ridge traverse connecting Langvatnet gapahuk with the panoramic granite summit of Kikut Peak.',
+    weather: '6°C • CRISP • GUSTS 5 M/S',
+    heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-kikut-1',
+        image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+        location: 'kikut-peak',
+        caption: 'High granite ledge of Kikut Peak overlooking Bjørnsjøen'
+      },
+      {
+        id: 'gal-kikut-2',
+        image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+        location: 'langvatnet-gapahuk',
+        caption: 'Morning basecamp at Langvatnet before starting the climb'
+      }
+    ],
+    content: [
+      'We set out early from Langvatnet gapahuk as first frost coated the spruce needles.',
+      'The trail climbs steadily toward Kikut Peak, crossing rocky scree slopes before opening into the great panorama.'
+    ]
+  },
+  {
+    id: 'dispatch-fi-5',
+    slug: 'autumn-night-vaha-riutta',
+    title: 'Autumn Night at Vähä-Riutan Laavu',
+    publishedAt: '2026-10-04T06:40:00Z',
+    status: 'published',
+    locations: ['vaha-riutta-laavu'],
+    excerpt: 'Overnight solo camp at the Vähä-Riutta double lean-to nestled between Iso-Riutta and Vähä-Riutta lakes along Birgitan polku in Lempäälä.',
+    weather: '2°C • CALM • BARO 1022 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-vaha-riutta-1',
+        image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+        location: 'vaha-riutta-laavu',
+        caption: 'Vähä-Riutan laavu beside calm autumn lake'
+      }
+    ],
+    content: [
+      'Overnight solo camp at the Vähä-Riutta double lean-to nestled between Iso-Riutta and Vähä-Riutta lakes along Birgitan polku in Lempäälä.'
+    ]
+  },
+  {
+    id: 'dispatch-birgitan-polku',
+    slug: 'birgitan-polku-circuit',
+    title: 'Birgitan Polku Lake Circuit & Ridge Traverse',
+    publishedAt: '2026-10-10T09:15:00Z',
+    status: 'published',
+    locations: ['savontie-trailhead', 'vaha-riutta-laavu', 'vaha-kauas-laavu'],
+    excerpt: 'Three-stage autumn trek beginning at Savontie trailhead, traversing north along pine ridges to the double timber shelter at Vähä-Riutta, and concluding at the remote lakeside kota at Vähä-Kauas.',
+    weather: '4°C • CRISP AUTUMN • BARO 1024 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-bpc-1',
+        image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80',
+        location: 'savontie-trailhead',
+        caption: 'Savontie trailhead gate under morning spruce shadows'
+      },
+      {
+        id: 'gal-bpc-2',
+        image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+        location: 'vaha-riutta-laavu',
+        caption: 'Double timber lean-to on the Vähä-Riutta lake isthmus'
+      },
+      {
+        id: 'gal-bpc-3',
+        image: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=1200&q=80',
+        location: 'vaha-kauas-laavu',
+        caption: 'Lakeside shelter and firewood reserve at Vähä-Kauas'
+      }
+    ],
+    content: [
+      'Stage 1: Departed Savontie trailhead under clear skies and cold autumn air.',
+      'Stage 2: Reached the Vähä-Riutta isthmus after a brisk 1.2km trek along pine root paths. The double lean-to was in immaculate condition with dry birch logs in the shed.',
+      'Stage 3: Pushed south along the Birgitan Polku ridge trail to Vähä-Kauas. Stoked a small hearth fire as evening mist settled over the water.'
+    ]
+  },
+  {
+    id: 'dispatch-helvetinjarvi-traverse',
+    slug: 'helvetinjarvi-taiga-traverse',
+    title: 'Helvetinjärvi & Pirkanmaa Grand Taiga Traverse',
+    publishedAt: '2026-10-15T08:00:00Z',
+    status: 'published',
+    locations: [
+      'kankimaki-trailhead',
+      'helvetinkolu-gapahuk',
+      'pirunkirkko-nakoalapaikka',
+      'kintulammi-kirkkokivi',
+      'kirskaanniemi-laavu'
+    ],
+    excerpt: 'Comprehensive five-point expedition surveying the fault valley staircase at Helvetinkolu, the precipitous cleft of Pirunkirkko, natural springheads at Kintulammi, and the rocky pine peninsula of Kirskaanniemi.',
+    weather: '5°C • MIST & SPRUCE CANOPY • BARO 1018 HPA',
+    heroImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+    gallery: [
+      {
+        id: 'gal-htt-1',
+        image: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80',
+        location: 'kankimaki-trailhead',
+        caption: 'Kankimäki trailhead gate leading into primeval spruce stands'
+      },
+      {
+        id: 'gal-htt-2',
+        image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=80',
+        location: 'helvetinkolu-gapahuk',
+        caption: 'Glacial fault cleft stairs descending to Helvetinjärvi shoreline'
+      },
+      {
+        id: 'gal-htt-3',
+        image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80',
+        location: 'pirunkirkko-nakoalapaikka',
+        caption: 'Granite boulder cave and steep precipice ledge at Pirunkirkko'
+      },
+      {
+        id: 'gal-htt-4',
+        image: 'https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?auto=format&fit=crop&w=1200&q=80',
+        location: 'kintulammi-kirkkokivi',
+        caption: 'Glacial erratic church stone and clear spring brook at Kintulammi'
+      },
+      {
+        id: 'gal-htt-5',
+        image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+        location: 'kirskaanniemi-laavu',
+        caption: 'Sunset across Höytämönjärvi from Kirskaanniemi point'
+      }
+    ],
+    content: [
+      'Stop 1 - Kankimäki Trailhead: Commenced expedition at 08:00 through morning fog.',
+      'Stop 2 - Helvetinkolu Cleft: Descended the iconic 40m granite fault stairs.',
+      'Stop 3 - Pirunkirkko Precipice: Surveyed the ancient cliffside rock overhang.',
+      'Stop 4 - Kintulammi Kirkkokivi: Replenished water flasks at the boreal spring and rested at the glacial erratic boulder.',
+      'Stop 5 - Kirskaanniemi Peninsula: Concluded the grand traverse beside the Höytämönjärvi hearth.'
+    ]
+  }
+]
+
+// =============================================================================
+// NORMALIZED LOCATIONS (nitf_locations - visitCount derived from dispatches)
+// =============================================================================
+export const mockLocations: Location[] = mockFieldNotes.map(note => {
+  const linkedDispatches = mockDispatches.filter(d => Array.isArray(d.locations) && d.locations.includes(note.id))
+
+  const amenityList: LocationAmenity[] = []
+  note.amenities.forEach(a => {
+    const l = a.label.toLowerCase()
+    if (l.includes('shelter')) amenityList.push('timber_shelter')
+    else if (l.includes('hearth') || l.includes('fire') || l.includes('grill')) amenityList.push('stone_hearth')
+    else if (l.includes('spring') || l.includes('potable')) amenityList.push('potable_water')
+    else if (l.includes('wood')) amenityList.push('dry_wood')
+    else if (l.includes('view') || l.includes('vista')) amenityList.push('lake_view')
+    else if (l.includes('water')) amenityList.push('lake_water')
+  })
+
+  // Trailhead self-referencing Location
+  let trailheadLoc: Location | undefined
+  if (note.trailhead) {
+    trailheadLoc = {
+      id: `th-${note.id}`,
+      slug: `${note.slug}-trailhead`,
+      name: note.trailhead.name,
+      area: note.areaId,
+      category: 'trailhead',
+      latitude: note.trailhead.latitude,
+      longitude: note.trailhead.longitude,
+      summary: `Trailhead parking for ${note.title}`,
+      amenities: [],
+      elevationGain: note.trailhead.elevationGain,
+      elevationLoss: note.trailhead.elevationLoss,
+      trailGeometry: note.trailhead.trailGeometry
+    }
+  }
+
+  return {
+    id: note.id,
+    slug: note.slug,
+    name: note.title,
+    area: note.areaId,
+    category: note.category.toLowerCase() as LocationCategory,
+    latitude: note.latitude,
+    longitude: note.longitude,
+    elevation: note.elevation,
+    summary: note.description,
+    amenities: amenityList,
+    trailhead: trailheadLoc,
+    trailGeometry: note.trailhead?.trailGeometry,
+    elevationGain: note.trailhead?.elevationGain,
+    elevationLoss: note.trailhead?.elevationLoss,
+    coverImage: {
+      id: `img-${note.id}`,
+      url: note.heroImage,
+      alt: note.title
+    },
+    dispatches: linkedDispatches
+  }
+})
+
 

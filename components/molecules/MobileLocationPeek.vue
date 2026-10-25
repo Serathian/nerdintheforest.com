@@ -116,6 +116,15 @@ const emit = defineEmits<{
         <span class="material-symbols-outlined btn-icon">explore_off</span>
         <span>TRAILHEAD ACCESS OFF-GRID</span>
       </button>
+
+      <NuxtLink
+        :to="`/locations/${location.slug || location.id}`"
+        class="action-btn dossier-link-btn font-mono"
+        title="Open full surveyor dossier and photo archive"
+      >
+        <span>FULL DOSSIER & PHOTOS</span>
+        <span class="material-symbols-outlined btn-icon">open_in_new</span>
+      </NuxtLink>
     </div>
   </div>
 </template>
@@ -301,7 +310,32 @@ const emit = defineEmits<{
 .peek-actions-row {
   display: flex;
   align-items: center;
+  gap: 8px;
   padding-top: 2px;
+}
+
+.dossier-link-btn {
+  white-space: nowrap;
+  text-decoration: none;
+  background-color: transparent;
+  color: var(--color-secondary, #d9531e);
+  border: 1.5px solid rgba(217, 83, 30, 0.4);
+  padding: 0 12px;
+  height: 38px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  transition: all 0.15s ease;
+}
+
+.dossier-link-btn:hover {
+  background-color: rgba(217, 83, 30, 0.08);
+  border-color: var(--color-secondary, #d9531e);
 }
 
 .trailhead-btn {

@@ -101,6 +101,18 @@ function copyShareUrl() {
               </span>
             </div>
 
+            <!-- Link to Location Dossier -->
+            <div class="location-link-row font-mono">
+              <span class="location-link-label">SURVEY POINT:</span>
+              <NuxtLink
+                :to="`/locations/${note.slug || note.id}`"
+                class="location-dossier-pill"
+              >
+                <span>{{ note.title }}</span>
+                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+              </NuxtLink>
+            </div>
+
             <div class="article-divider" />
           </header>
 
@@ -339,6 +351,41 @@ function copyShareUrl() {
 .chip-icon {
   font-size: 12px;
   color: var(--color-secondary);
+}
+
+.location-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.location-link-label {
+  color: var(--color-tertiary, #526056);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.location-dossier-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--color-surface-container, #f3ede1);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: var(--color-secondary, #d9531e);
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.location-dossier-pill:hover {
+  background-color: var(--color-primary, #1b2e24);
+  color: #ffffff;
+  border-color: var(--color-primary, #1b2e24);
 }
 
 .article-divider {

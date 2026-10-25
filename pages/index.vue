@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { FilterState } from '~/components/organisms/FilterModal.vue'
 import { calculateMapFocusPadding, measureDrawerTop } from '~/utils/mapViewport'
+import { mockFieldNotes, mockLocations } from '~/data/mockNordicTrail'
 
 useHead({
   title: 'Nerd in the Forest — Nordic Cartography & Adventure Atlas',
@@ -19,6 +20,9 @@ const mapRef = ref<any>(null)
 const selectedNoteId = ref('')
 const isDossierOpen = ref(false)
 const isReaderOpen = ref(false)
+const router = useRouter()
+const route = useRoute()
+const activeDispatchInspection = useState<any>('activeDispatchInspection', () => null)
 const isFilterOpen = ref(false)
 const searchQuery = ref('')
 const activeCategory = ref('ALL')
@@ -35,11 +39,368 @@ const filters = ref<FilterState>({
   amenities: []
 })
 
-const { fieldNotes, mapWaypoints, fetchPosts, fetchWaypoints } = useNitfCms()
+const { fieldNotes, mapWaypoints, locations, dispatches, fetchPosts, fetchWaypoints, fetchDispatchBySlug, fetchLocationBySlug } = useNitfCms()
+
+const activeDispatchSlug = computed(() => {
+  return (route.query.dispatch as string) || (route.query.story as string) || activeDispatchInspection.value?.slug || ''
+})
+
+const asyncFetchedDispatch = ref<any>(null)
+
+watch(activeDispatchSlug, async (slug) => {
+  if (!slug) {
+    asyncFetchedDispatch.value = null
+    return
+  }
+
+  // 1. Direct match in local dispatches
+  const found = dispatches.value.find(d => d.slug === slug || d.id === slug)
+  if (found) {
+    asyncFetchedDispatch.value = found
+    return
+  }
+
+  // 2. Fetch directly from CMS
+  try {
+    const fetched = await fetchDispatchBySlug(slug)
+    if (fetched) {
+      asyncFetchedDispatch.value = fetched
+      return
+    }
+  } catch {
+    // Ignore fetch error
+  }
+
+  // 3. Fallback: check if slug matches a field note that has linked dispatches
+  const matchingNote = fieldNotes.value.find(n => n.slug === slug || n.id === slug)
+  if (matchingNote && matchingNote.dispatches && matchingNote.dispatches.length > 0) {
+    const d = matchingNote.dispatches[0]
+    const foundInList = dispatches.value.find(item => item.slug === d.slug || item.id === d.id)
+    if (foundInList) {
+      asyncFetchedDispatch.value = foundInList
+      return
+    }
+    asyncFetchedDispatch.value = {
+      id: d.id,
+      slug: d.slug,
+      title: d.title,
+      publishedAt: d.date || new Date().toISOString(),
+      status: 'published',
+      locations: [matchingNote.id],
+      excerpt: d.excerpt || '',
+      weather: d.weather || '4°C • MIST',
+      heroImage: d.heroImage,
+      content: d.content || []
+    }
+  }
+}, { immediate: true })
+
+const activeInspectedDispatch = computed(() => {
+  if (asyncFetchedDispatch.value) return asyncFetchedDispatch.value
+  const query = activeDispatchSlug.value
+  if (!query) return null
+  return dispatches.value.find(d => d.slug === query || d.id === query) || null
+})
+
+const inspectedWaypoints = computed(() => {
+  if (!activeInspectedDispatch.value) return []
+  const d = activeInspectedDispatch.value
+  if (!d.locations || !Array.isArray(d.locations)) return []
+
+  const list: any[] = []
+  d.locations.forEach((locRef: any, idx: number) => {
+    const locId = typeof locRef === 'object' && locRef !== null ? String(locRef.id || locRef.slug || '') : String(locRef)
+    const locSlug = typeof locRef === 'object' && locRef !== null ? String(locRef.slug || locRef.id || '') : String(locRef)
+
+    // 1. Try matching in fieldNotes
+    const matchedNote = fieldNotes.value.find(n =>
+      String(n.id) === locId ||
+      String(n.slug) === locSlug ||
+      String(n.id) === locSlug ||
+      String(n.slug) === locId
+    )
+
+    // 2. Try matching in locations
+    const matchedLoc = locations.value.find(l =>
+      String(l.id) === locId ||
+      String(l.slug) === locSlug ||
+      String(l.id) === locSlug ||
+      String(l.slug) === locId
+    )
+
+    // 3. Fallback to mock data if CMS database doesn't have this location
+    const matchedMock = mockFieldNotes.find(n =>
+      String(n.id) === locId ||
+      String(n.slug) === locSlug ||
+      String(n.id) === locSlug ||
+      String(n.slug) === locId
+    ) || mockLocations.find(l =>
+      String(l.id) === locId ||
+      String(l.slug) === locSlug ||
+      String(l.id) === locSlug ||
+      String(l.slug) === locId
+    )
+
+    if (matchedNote) {
+      list.push({
+        id: matchedNote.id,
+        slug: matchedNote.slug || matchedNote.id,
+        title: matchedNote.title,
+        elevation: matchedNote.elevation,
+        category: matchedNote.category,
+        latitude: matchedNote.latitude,
+        longitude: matchedNote.longitude,
+        summary: matchedNote.description,
+        order: idx + 1
+      })
+    } else if (matchedLoc) {
+      list.push({
+        id: matchedLoc.id,
+        slug: matchedLoc.slug || matchedLoc.id,
+        title: matchedLoc.name,
+        elevation: matchedLoc.elevation,
+        category: matchedLoc.category,
+        latitude: matchedLoc.latitude,
+        longitude: matchedLoc.longitude,
+        summary: matchedLoc.summary,
+        order: idx + 1
+      })
+    } else if (matchedMock) {
+      const isLoc = 'name' in matchedMock
+      list.push({
+        id: matchedMock.id,
+        slug: matchedMock.slug || matchedMock.id,
+        title: isLoc ? (matchedMock as any).name : (matchedMock as any).title,
+        elevation: matchedMock.elevation,
+        category: matchedMock.category,
+        latitude: matchedMock.latitude,
+        longitude: matchedMock.longitude,
+        summary: isLoc ? (matchedMock as any).summary : (matchedMock as any).description,
+        order: idx + 1
+      })
+    } else if (typeof locRef === 'object' && locRef !== null) {
+      list.push({
+        id: String(locRef.id || `loc-${idx}`),
+        slug: String(locRef.slug || locRef.id || `loc-${idx}`),
+        title: locRef.name || locRef.title || 'Surveyed Waypoint',
+        elevation: locRef.elevation,
+        category: locRef.category,
+        latitude: locRef.latitude,
+        longitude: locRef.longitude,
+        summary: locRef.summary || '',
+        order: idx + 1
+      })
+    }
+  })
+  return list
+})
+
+const inspectedRoute = computed(() => {
+  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return null
+  return {
+    dispatchId: activeInspectedDispatch.value.id,
+    title: activeInspectedDispatch.value.title,
+    waypoints: inspectedWaypoints.value
+      .filter(w => w.latitude != null && w.longitude != null)
+      .map(w => ({
+        id: w.id,
+        title: w.title,
+        lat: w.latitude!,
+        lng: w.longitude!,
+        order: w.order
+      }))
+  }
+})
+
+async function focusInspectedRoute() {
+  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return
+
+  await nextTick()
+  if (typeof window !== 'undefined') {
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+
+  const points: Array<[number, number]> = inspectedWaypoints.value
+    .filter(w => w.longitude != null && w.latitude != null)
+    .map(w => [w.longitude!, w.latitude!])
+
+  if (points.length > 0) {
+    if (!mapRef.value) {
+      setTimeout(() => {
+        mapRef.value?.focusOn(points, getMapFocusPadding())
+      }, 120)
+      return
+    }
+    mapRef.value?.focusOn(points, getMapFocusPadding())
+  }
+}
+
+watch([activeInspectedDispatch, inspectedWaypoints], ([d, wps]) => {
+  if (d) {
+    activeDispatchInspection.value = {
+      dispatchId: d.id,
+      slug: d.slug,
+      title: d.title,
+      locationsCount: d.locations?.length || 0
+    }
+    if (wps.length > 0 && !selectedNoteId.value) {
+      focusInspectedRoute()
+    }
+  } else if (!route.query.dispatch && !route.query.story) {
+    activeDispatchInspection.value = null
+  }
+}, { immediate: true, flush: 'post' })
+
+function handleExitInspection() {
+  activeDispatchInspection.value = null
+  selectedNoteId.value = ''
+  const query = { ...route.query }
+  delete query.dispatch
+  delete query.story
+  router.push({ path: route.path, query })
+  nextTick(() => {
+    fitAllWaypoints()
+  })
+}
 
 function handleWindowResize() {
-  if (selectedNoteId.value) {
+  if (activeInspectedDispatch.value) {
+    if (selectedNoteId.value) {
+      focusSelection()
+    } else {
+      focusInspectedRoute()
+    }
+  } else if (selectedNoteId.value) {
     focusSelection()
+  }
+}
+
+function focusStoryLocations(storySlugOrId: string): boolean {
+  if (!storySlugOrId) return false
+
+  // 1. Find matching dispatch
+  const dispatch = dispatches.value.find(d => d.slug === storySlugOrId || d.id === storySlugOrId)
+
+  let targetNotes: any[] = []
+  if (dispatch && Array.isArray(dispatch.locations) && dispatch.locations.length > 0) {
+    targetNotes = fieldNotes.value.filter(n => {
+      return dispatch.locations.some(l => {
+        const id = typeof l === 'object' && l !== null ? (l.id || l.slug) : String(l)
+        return id === n.id || id === n.slug
+      })
+    })
+  }
+
+  // Fallback: look for matching field note directly
+  if (targetNotes.length === 0) {
+    const single = fieldNotes.value.find(n => n.slug === storySlugOrId || n.id === storySlugOrId)
+    if (single) targetNotes.push(single)
+  }
+
+  // Also check if any field note has a dispatch with this slug
+  if (targetNotes.length === 0) {
+    const matchingNote = fieldNotes.value.find(n => n.dispatches?.some(d => d.slug === storySlugOrId || d.id === storySlugOrId))
+    if (matchingNote) targetNotes.push(matchingNote)
+  }
+
+  if (targetNotes.length === 0) return false
+
+  // Set selected note to the first location in the route
+  selectedNoteId.value = targetNotes[0].id
+
+  // Collect coordinates of all locations in the story (plus trailheads)
+  const points: Array<[number, number]> = []
+  for (const note of targetNotes) {
+    if (note.longitude != null && note.latitude != null) {
+      points.push([note.longitude, note.latitude])
+    }
+    if (note.trailhead?.longitude != null && note.trailhead?.latitude != null) {
+      points.push([note.trailhead.longitude, note.trailhead.latitude])
+    }
+  }
+
+  if (points.length > 0) {
+    nextTick(() => {
+      mapRef.value?.focusOn(points, getMapFocusPadding())
+    })
+  }
+
+  return true
+}
+
+function fitAllWaypoints() {
+  nextTick(() => {
+    const list = filteredWaypoints.value.length > 0 ? filteredWaypoints.value : mapWaypoints.value
+    if (list.length > 0) {
+      const points: Array<[number, number]> = list.map(wp => [wp.lng, wp.lat])
+      mapRef.value?.focusOn(points, getMapFocusPadding())
+    }
+  })
+}
+
+function initDefaultPosition() {
+  // Check URL query param for direct story or location link sharing
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    const storyParam = params.get('story') || params.get('dispatch')
+    if (storyParam) {
+      isReaderOpen.value = false
+      showNotification('Dispatch route inspection active')
+      focusInspectedRoute()
+      return
+    }
+
+    const locationParam = params.get('location')
+    if (locationParam) {
+      const match = fieldNotes.value.find(n => n.slug === locationParam || n.id === locationParam)
+      if (match) {
+        selectedNoteId.value = match.id
+        nextTick(() => focusSelection())
+        return
+      }
+    }
+  }
+
+  // 1. Check if camera was remembered from previous session / refresh
+  const hasSavedCamera = mapRef.value?.hasSavedCamera?.()
+  if (hasSavedCamera) {
+    // Camera is already positioned at saved coordinates by MapCanvas.
+    // Silently obtain user coordinates in background to display the blue marker if available
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userLocation.value = [pos.coords.longitude, pos.coords.latitude]
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000 }
+      )
+    }
+    return
+  }
+
+  // 2. No saved camera -> App default location:
+  // "The apps default location should be the users location. If that isn't available then show all the points currently on the map."
+  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+    // Show all waypoints immediately while waiting for GPS / permission prompt
+    fitAllWaypoints()
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lng = position.coords.longitude
+        const lat = position.coords.latitude
+        userLocation.value = [lng, lat]
+        mapRef.value?.flyToCoordinates(lng, lat, 13)
+        showNotification(`Position acquired [${lat.toFixed(3)}°N • ${lng.toFixed(3)}°E]`)
+      },
+      (_err) => {
+        // Geolocation denied, unavailable, or timed out -> frame all points currently on the map
+        fitAllWaypoints()
+      },
+      { enableHighAccuracy: true, timeout: 6000 }
+    )
+  } else {
+    // Geolocation not supported by device
+    fitAllWaypoints()
   }
 }
 
@@ -55,18 +416,7 @@ onMounted(async () => {
     window.addEventListener('resize', handleWindowResize)
   }
 
-  // Check URL query param for direct story link sharing (e.g., ?story=langvatnet-gapahuk or ?story=note-1)
-  if (typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search)
-    const storyParam = params.get('story')
-    if (storyParam) {
-      const match = fieldNotes.value.find(n => n.slug === storyParam || n.id === storyParam)
-      if (match) {
-        selectedNoteId.value = match.id
-        isReaderOpen.value = true
-      }
-    }
-  }
+  initDefaultPosition()
 })
 
 onUnmounted(() => {
@@ -202,7 +552,18 @@ function getMapFocusPadding() {
 }
 
 async function focusSelection() {
-  const note = fieldNotes.value.find(n => n.id === selectedNoteId.value)
+  let note: any = fieldNotes.value.find(n => n.id === selectedNoteId.value || n.slug === selectedNoteId.value)
+  if (!note && activeInspectedDispatch.value) {
+    const wp = inspectedWaypoints.value.find(w => w.id === selectedNoteId.value || w.slug === selectedNoteId.value)
+    if (wp) {
+      note = {
+        id: wp.id,
+        latitude: wp.latitude,
+        longitude: wp.longitude,
+        trailhead: (wp as any).trailhead
+      }
+    }
+  }
   if (!note || note.longitude == null || note.latitude == null) return
 
   // Await Vue DOM patch and requestAnimationFrame layout resolution
@@ -229,7 +590,11 @@ async function focusSelection() {
 
 // Frame the selection after the DOM updates so the peek card is rendered and measurable
 watch(selectedNoteId, (id) => {
-  if (id) focusSelection()
+  if (id) {
+    focusSelection()
+  } else if (activeInspectedDispatch.value) {
+    focusInspectedRoute()
+  }
 }, { flush: 'post' })
 
 function handleSelectNote(id: string) {
@@ -325,11 +690,8 @@ function handleLocate() {
     },
     (err) => {
       isLocating.value = false
-      const fallbackLng = 10.715
-      const fallbackLat = 60.270
-      userLocation.value = [fallbackLng, fallbackLat]
-      mapRef.value?.flyToCoordinates(fallbackLng, fallbackLat, 13)
-      showNotification('Using Nordmarka field benchmark coords')
+      showNotification('Location access unavailable — showing all waypoints')
+      fitAllWaypoints()
     },
     { enableHighAccuracy: true, timeout: 8000 }
   )
@@ -340,34 +702,21 @@ function handleClearSelected() {
 }
 
 function handleReadStory(target: any) {
-  let noteObj = null
+  let storyIdentifier = ''
+
   if (typeof target === 'string') {
-    noteObj = fieldNotes.value.find(n => n.id === target || n.slug === target)
+    storyIdentifier = target
   } else if (target && typeof target === 'object') {
-    if (target.slug) {
-      noteObj = fieldNotes.value.find(n => n.slug === target.slug || n.id === target.id)
-      if (!noteObj) {
-        noteObj = fieldNotes.value.find(n => n.dispatches?.some(d => d.slug === target.slug || d.id === target.id))
-      }
-      if (!noteObj && selectedNote.value) {
-        noteObj = { ...selectedNote.value, ...target }
-      }
-    } else {
-      noteObj = target
-    }
+    storyIdentifier = target.slug || target.id || ''
   }
 
-  if (noteObj) {
-    selectedNoteId.value = noteObj.id
+  if (storyIdentifier) {
+    router.push(`/dispatches/${storyIdentifier}`)
+    return
   }
-  isDossierOpen.value = false
-  isReaderOpen.value = true
 
-  // Sync URL query without full page reload for shareability
-  if (typeof window !== 'undefined' && noteObj) {
-    const url = new URL(window.location.href)
-    url.searchParams.set('story', noteObj.slug || noteObj.id)
-    window.history.pushState({}, '', url.toString())
+  if (target && typeof target === 'object' && target.id) {
+    router.push(`/locations/${target.slug || target.id}`)
   }
 }
 
@@ -399,6 +748,7 @@ function showNotification(msg: string) {
       <ClientOnly>
         <MapCanvas ref="mapRef" :waypoints="filteredWaypoints" :selected-id="selectedNoteId"
           :trailhead="selectedTrailhead" :active-layer="activeLayer" :user-location="userLocation"
+          :inspected-route="inspectedRoute"
           @select-waypoint="handleSelectNote" />
       </ClientOnly>
 
@@ -418,12 +768,13 @@ function showNotification(msg: string) {
     <!-- TWO-ZONE BOTTOM DRAWER (docked fixed at bottom: 64px) -->
     <MobileDrawer ref="drawerRef" :field-notes="filteredFieldNotes" :selected-id="selectedNoteId"
       :search-query="searchQuery" :active-category="activeCategory" :active-filter-count="activeFilterCount"
+      :active-dispatch="activeInspectedDispatch" :inspected-waypoints="inspectedWaypoints"
       @select-note="handleSelectNote" @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
         selectedNoteId = p.id
         focusSelection()
         showNotification('Opening maps to trailhead...')
       }" @open-filters="handleOpenFilters" @update:search-query="(q) => searchQuery = q"
-      @select-category="handleSelectCategory" />
+      @select-category="handleSelectCategory" @exit-inspection="handleExitInspection" />
 
     <!-- STANDARDIZED DOSSIER SHEET MODAL -->
     <DossierSheet :note="selectedNote" :is-open="isDossierOpen" @close="isDossierOpen = false"

@@ -168,6 +168,15 @@ function handleNavigateTrailhead() {
 
         <!-- Sticky Action Buttons Footer -->
         <div class="px-4 py-3 border-t border-outline-variant/40 bg-surface-container-high/90 backdrop-blur flex items-center gap-2 shrink-0 pb-safe">
+          <NuxtLink
+            :to="`/locations/${(note as any).slug || note.id}`"
+            class="h-11 px-3 rounded bg-surface-container hover:bg-surface-container-highest border border-outline/35 text-primary font-mono text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all"
+            title="Open dedicated location dossier page and photo gallery"
+          >
+            <span>DOSSIER</span>
+            <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+          </NuxtLink>
+
           <button
             v-if="(note.visitedCount ?? 0) > 0"
             class="flex-1 h-11 rounded bg-primary hover:bg-primary-container text-white font-mono text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all"

@@ -44,14 +44,19 @@ export function calculateMapFocusPadding(options: ViewportPaddingOptions): MapFo
  */
 export function measureDrawerTop(rootEl?: HTMLElement | null): number {
   if (typeof window === 'undefined') return 0
+  const doc = typeof document !== 'undefined' ? document : null
 
   const mainCard = (rootEl?.querySelector('.mobile-drawer-main-card') ||
     rootEl?.querySelector('.main-section-card') ||
-    document.querySelector('.mobile-drawer-main-card') ||
-    document.querySelector('.main-section-card')) as HTMLElement | null
+    rootEl?.querySelector('.inspection-dock-card') ||
+    rootEl?.querySelector('.dispatch-inspection-peek') ||
+    doc?.querySelector('.mobile-drawer-main-card') ||
+    doc?.querySelector('.main-section-card') ||
+    doc?.querySelector('.inspection-dock-card') ||
+    doc?.querySelector('.dispatch-inspection-peek')) as HTMLElement | null
 
   const openSheet = (rootEl?.querySelector('.collapsible-drawer-sheet.is-open') ||
-    document.querySelector('.collapsible-drawer-sheet.is-open')) as HTMLElement | null
+    doc?.querySelector('.collapsible-drawer-sheet.is-open')) as HTMLElement | null
 
   let highestTop = window.innerHeight
 
@@ -72,7 +77,9 @@ export function measureDrawerTop(rootEl?: HTMLElement | null): number {
   if (highestTop >= window.innerHeight) {
     const dock = (rootEl?.querySelector('.mobile-map-bottom-container') ||
       rootEl?.querySelector('.drawer-dock-container') ||
-      document.querySelector('.drawer-dock-container')) as HTMLElement | null
+      rootEl?.querySelector('.inspection-dock-container') ||
+      doc?.querySelector('.drawer-dock-container') ||
+      doc?.querySelector('.inspection-dock-container')) as HTMLElement | null
     if (dock) {
       const rect = dock.getBoundingClientRect()
       if (rect.height > 0) {

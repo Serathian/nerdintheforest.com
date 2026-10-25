@@ -1,11 +1,4 @@
-export interface Area {
-  id: string
-  name: string
-  country: string
-  description?: string
-  center?: [number, number]
-  zoom?: number
-}
+export * from './models'
 
 export interface AmenityItem {
   icon: string
@@ -52,7 +45,7 @@ export interface FieldNote {
   elevationGain?: number
   elevationLoss?: number
   distanceKm?: number
-  category?: 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'SUMMIT' | 'VIEWPOINT' | string
+  category?: 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'SUMMIT' | 'VIEWPOINT' | 'TRAILHEAD' | string
   slug?: string
   date?: string
   readTime?: string
@@ -62,4 +55,3 @@ export interface FieldNote {
   dispatches?: LinkedDispatch[]
   trailhead?: Trailhead
 }
-

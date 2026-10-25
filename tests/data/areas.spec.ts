@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mockAreas, mockFieldNotes, mockMapWaypoints } from '../../data/mockNordicTrail'
-import type { FilterState } from '../../components/organisms/FilterModal.vue'
+import type { FilterState } from '../../types/models'
 
 describe('Atlas Map Area Model and Filter Specification', () => {
   it('validates configured areas including Pirkanmaa in Finland', () => {

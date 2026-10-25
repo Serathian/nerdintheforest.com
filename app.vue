@@ -1,16 +1,60 @@
 <script setup lang="ts">
-// Global layout shell hosting persistent Apple notch, routed views, and bottom navigation
+import { useRouter, useRoute } from 'vue-router'
+
+export interface ActiveInspection {
+  dispatchId: string
+  slug: string
+  title: string
+  locationsCount?: number
+}
+
+const activeInspection = useState<ActiveInspection | null>('activeDispatchInspection', () => null)
+const router = useRouter()
+const route = useRoute()
+
+function exitInspection() {
+  activeInspection.value = null
+  const query = { ...route.query }
+  delete query.dispatch
+  delete query.story
+  router.push({ path: route.path, query })
+}
 </script>
 
 <template>
   <div class="nordic-mobile-viewport">
     <!-- Top Center Brand Notch (Apple-style attached notch) -->
-    <div class="brand-notch font-mono">
-      <span class="notch-dot" />
-      <span class="notch-title">Nerd in the Forest</span>
-      <span class="notch-sep">//</span>
-      <span class="notch-subtitle">Adventure Atlas</span>
-    </div>
+    <ClientOnly>
+      <div v-if="activeInspection" class="brand-notch inspection font-mono">
+        <span class="notch-beacon" />
+        <span class="notch-title inspection-label">DISPATCH INSPECTION</span>
+        <span class="notch-sep">//</span>
+        <span class="notch-subtitle inspection-title">{{ activeInspection.title }}</span>
+        <button
+          class="notch-close-btn"
+          type="button"
+          title="Exit Dispatch Inspection"
+          aria-label="Exit Dispatch Inspection"
+          @click="exitInspection"
+        >
+          <span class="material-symbols-outlined text-[13px]">close</span>
+        </button>
+      </div>
+      <div v-else class="brand-notch font-mono">
+        <span class="notch-dot" />
+        <span class="notch-title">Nerd in the Forest</span>
+        <span class="notch-sep">//</span>
+        <span class="notch-subtitle">Adventure Atlas</span>
+      </div>
+      <template #fallback>
+        <div class="brand-notch font-mono">
+          <span class="notch-dot" />
+          <span class="notch-title">Nerd in the Forest</span>
+          <span class="notch-sep">//</span>
+          <span class="notch-subtitle">Adventure Atlas</span>
+        </div>
+      </template>
+    </ClientOnly>
 
     <!-- Routed View -->
     <NuxtPage />
@@ -91,5 +135,64 @@
   text-transform: uppercase;
   color: var(--color-on-surface-variant);
   line-height: 1;
+}
+
+.brand-notch.inspection {
+  background-color: rgba(254, 249, 237, 0.98);
+  border-bottom: 2px solid var(--color-secondary);
+}
+
+.notch-beacon {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: var(--color-secondary);
+  box-shadow: 0 0 8px rgba(217, 83, 30, 0.7);
+  flex-shrink: 0;
+  animation: beacon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes beacon-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.inspection-label {
+  color: var(--color-secondary) !important;
+}
+
+.inspection-title {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .inspection-title {
+    max-width: 240px;
+  }
+}
+
+.notch-close-btn {
+  background: transparent;
+  border: 1px solid rgba(115, 120, 116, 0.4);
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+  margin-left: 4px;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.notch-close-btn:hover {
+  background-color: var(--color-secondary);
+  color: #ffffff;
+  border-color: var(--color-secondary);
 }
 </style>
