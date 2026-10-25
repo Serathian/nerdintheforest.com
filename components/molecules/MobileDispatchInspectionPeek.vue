@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import type { Dispatch } from '~/types/models'
 import { haversineKm, formatDistance } from '~/utils/geo'
+import ElevationProfile from '../atoms/ElevationProfile.vue'
 
 interface WaypointItem {
   id: string
   slug: string
   title: string
   elevation?: number
+  elevationGain?: number
+  elevationLoss?: number
   category?: string
   latitude?: number
   longitude?: number
@@ -38,6 +41,12 @@ interface LegItem {
   distanceFormatted: string
   fromId: string
   toId: string
+  startElevation: number
+  destinationElevation: number
+  elevationGain: number
+  elevationLoss: number
+  fromTitle: string
+  toTitle: string
 }
 
 const legs = computed<LegItem[]>(() => {
@@ -51,16 +60,40 @@ const legs = computed<LegItem[]>(() => {
     if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
       distKm = haversineKm([from.longitude, from.latitude], [to.longitude, to.latitude])
     }
+
+    const startElev = from.elevation ?? 250
+    const destElev = to.elevation ?? 280
+    const netDiff = destElev - startElev
+    const undulatingMargin = Math.max(12, Math.round(distKm * 18))
+
+    const gain = to.elevationGain != null && to.elevationGain > 0
+      ? to.elevationGain
+      : Math.max(0, netDiff) + undulatingMargin
+    const loss = to.elevationLoss != null && to.elevationLoss > 0
+      ? to.elevationLoss
+      : Math.max(0, -netDiff) + undulatingMargin
+
     list.push({
       index: i,
       letter: String.fromCharCode(65 + i), // 0 -> 'A', 1 -> 'B', 2 -> 'C', etc.
-      distanceKm: distKm,
+      distanceKm: Number(distKm.toFixed(1)),
       distanceFormatted: formatDistance(distKm),
       fromId: from.id,
-      toId: to.id
+      toId: to.id,
+      startElevation: startElev,
+      destinationElevation: destElev,
+      elevationGain: gain,
+      elevationLoss: loss,
+      fromTitle: from.title,
+      toTitle: to.title
     })
   }
   return list
+})
+
+const selectedLegData = computed<LegItem | null>(() => {
+  if (props.selectedLegIndex === null || props.selectedLegIndex === undefined) return null
+  return legs.value[props.selectedLegIndex] || null
 })
 
 function handleLegClick(index: number) {
@@ -143,6 +176,18 @@ function getCategoryIcon(cat?: string): string {
         </template>
       </div>
     </div>
+
+    <!-- Selected Leg Elevation Profile (matches Location page / MobileLocationPeek) -->
+    <ElevationProfile
+      v-if="selectedLegData"
+      :start-elevation="selectedLegData.startElevation"
+      :destination-elevation="selectedLegData.destinationElevation"
+      :elevation-gain="selectedLegData.elevationGain"
+      :elevation-loss="selectedLegData.elevationLoss"
+      :distance-km="selectedLegData.distanceKm"
+      :trailhead-name="selectedLegData.fromTitle"
+      :destination-name="selectedLegData.toTitle"
+    />
 
     <!-- Actions Row -->
     <div class="peek-actions-row font-mono">

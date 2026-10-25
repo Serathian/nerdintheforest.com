@@ -309,11 +309,18 @@ export function transformCmsDispatch(doc: any): Dispatch {
     contentList = [doc.excerpt]
   }
 
+  const slugStr = doc.slug || String(doc.id)
+  const matchedMockDispatch = mockDispatches.find(
+    d => d.slug === slugStr || d.id === slugStr || d.id === String(doc.id)
+  )
+
   return {
-    id: doc.slug || String(doc.id),
-    slug: doc.slug || String(doc.id),
+    id: slugStr,
+    slug: slugStr,
     title: doc.title || 'Field Dispatch',
     publishedAt: doc.published_at || doc.createdAt || new Date().toISOString(),
+    startDate: doc.start_date || doc.startDate || matchedMockDispatch?.startDate || doc.published_at || doc.createdAt,
+    endDate: doc.end_date || doc.endDate || matchedMockDispatch?.endDate,
     status: doc.status || 'published',
     locations: locationsList,
     gallery: galleryList,

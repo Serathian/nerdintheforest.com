@@ -96,6 +96,47 @@ export function calculateReadTime(content: string | string[]): string {
 }
 
 /**
+ * Formats a dispatch expedition date span (startDate .. endDate) cleanly.
+ * Examples:
+ * - Single day: "OCT 2–4, 2026" or "OCT 4, 2026"
+ * - Cross-month: "SEP 29 – OCT 2, 2026"
+ */
+export function formatDispatchDateRange(startDate?: string, endDate?: string, fallbackDate?: string): string {
+  const rawStart = startDate || fallbackDate
+  if (!rawStart) return 'FIELD EXPEDITION'
+  const start = new Date(rawStart)
+  if (Number.isNaN(start.getTime())) return rawStart.toUpperCase()
+
+  const sMonth = start.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()
+  const sDay = start.getUTCDate()
+  const sYear = start.getUTCFullYear()
+
+  if (!endDate) {
+    return `${sMonth} ${sDay}, ${sYear}`
+  }
+
+  const end = new Date(endDate)
+  if (Number.isNaN(end.getTime())) {
+    return `${sMonth} ${sDay}, ${sYear}`
+  }
+
+  const eMonth = end.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase()
+  const eDay = end.getUTCDate()
+  const eYear = end.getUTCFullYear()
+
+  if (sYear === eYear && sMonth === eMonth && sDay === eDay) {
+    return `${sMonth} ${sDay}, ${sYear}`
+  }
+  if (sYear === eYear && sMonth === eMonth) {
+    return `${sMonth} ${sDay}–${eDay}, ${sYear}`
+  }
+  if (sYear === eYear) {
+    return `${sMonth} ${sDay} – ${eMonth} ${eDay}, ${sYear}`
+  }
+  return `${sMonth} ${sDay}, ${sYear} – ${eMonth} ${eDay}, ${eYear}`
+}
+
+/**
  * Computes base weight (packed + essential) and total carried items for a loadout.
  */
 export function calculateLoadoutStats(loadout: Loadout) {

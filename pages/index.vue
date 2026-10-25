@@ -153,6 +153,8 @@ const inspectedWaypoints = computed(() => {
         slug: matchedNote.slug || matchedNote.id,
         title: matchedNote.title,
         elevation: matchedNote.elevation,
+        elevationGain: matchedNote.elevationGain ?? matchedNote.trailhead?.elevationGain,
+        elevationLoss: matchedNote.elevationLoss ?? matchedNote.trailhead?.elevationLoss,
         category: matchedNote.category,
         latitude: matchedNote.latitude,
         longitude: matchedNote.longitude,
@@ -165,6 +167,8 @@ const inspectedWaypoints = computed(() => {
         slug: matchedLoc.slug || matchedLoc.id,
         title: matchedLoc.name,
         elevation: matchedLoc.elevation,
+        elevationGain: matchedLoc.elevationGain,
+        elevationLoss: matchedLoc.elevationLoss,
         category: matchedLoc.category,
         latitude: matchedLoc.latitude,
         longitude: matchedLoc.longitude,
@@ -178,6 +182,8 @@ const inspectedWaypoints = computed(() => {
         slug: matchedMock.slug || matchedMock.id,
         title: isLoc ? (matchedMock as any).name : (matchedMock as any).title,
         elevation: matchedMock.elevation,
+        elevationGain: (matchedMock as any).elevationGain ?? (matchedMock as any).trailhead?.elevationGain,
+        elevationLoss: (matchedMock as any).elevationLoss ?? (matchedMock as any).trailhead?.elevationLoss,
         category: matchedMock.category,
         latitude: matchedMock.latitude,
         longitude: matchedMock.longitude,
@@ -190,6 +196,8 @@ const inspectedWaypoints = computed(() => {
         slug: String(locRef.slug || locRef.id || `loc-${idx}`),
         title: locRef.name || locRef.title || 'Surveyed Waypoint',
         elevation: locRef.elevation,
+        elevationGain: locRef.elevation_gain ?? locRef.elevationGain,
+        elevationLoss: locRef.elevation_loss ?? locRef.elevationLoss,
         category: locRef.category,
         latitude: locRef.latitude,
         longitude: locRef.longitude,
@@ -714,6 +722,11 @@ function handleSelectNote(id: string) {
   selectedNoteId.value = id
 }
 
+function handleSelectCluster(points: Array<[number, number]>) {
+  if (!points || points.length === 0) return
+  mapRef.value?.focusOn(points, getMapFocusPadding())
+}
+
 function handleSelectCategory(cat: string) {
   activeCategory.value = cat
   filters.value.category = cat
@@ -857,7 +870,8 @@ function showNotification(msg: string) {
         <MapCanvas ref="mapRef" :waypoints="filteredWaypoints" :selected-id="selectedNoteId"
           :trailhead="selectedTrailhead" :active-layer="activeLayer" :user-location="userLocation"
           :inspected-route="inspectedRoute" :selected-leg-index="selectedLegIndex"
-          @select-waypoint="handleSelectNote" @select-leg="handleSelectLeg" @map-click="handleMapClick"
+          @select-waypoint="handleSelectNote" @select-cluster="handleSelectCluster"
+          @select-leg="handleSelectLeg" @map-click="handleMapClick"
           @ready="handleMapReady" />
       </ClientOnly>
 

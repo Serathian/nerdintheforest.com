@@ -109,7 +109,9 @@ export interface Dispatch {
   id: string
   slug: string
   title: string
-  publishedAt: string      // ISO Date or human string
+  publishedAt: string      // ISO Date or human string when article was published
+  startDate?: string       // ISO Date of expedition start
+  endDate?: string         // ISO Date of expedition end (optional / multi-day)
   status: 'draft' | 'published'
   locations: Relation<Location>[]
   gallery?: DispatchGalleryItem[]

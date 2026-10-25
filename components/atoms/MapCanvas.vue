@@ -70,6 +70,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'select-waypoint', id: string): void
+  (e: 'select-cluster', points: Array<[number, number]>): void
   (e: 'select-leg', index: number): void
   (e: 'map-click'): void
   (e: 'ready'): void
@@ -841,34 +842,59 @@ onMounted(() => {
   map.on('click', 'nitf-inspected-route-line', handleLegRouteClick)
   map.on('click', 'nitf-inspected-route-line-casing', handleLegRouteClick)
 
-  // Cluster click: zoom in to expand the cluster
+  // Cluster click: fit all member markers of the cluster cleanly inside the viewport
+  let lastClusterClickEvent: Event | null = null
   const handleClusterClick = async (e: any) => {
+    if (e.originalEvent && e.originalEvent === lastClusterClickEvent) return
+    lastClusterClickEvent = e.originalEvent || null
+
     const features = map?.queryRenderedFeatures(e.point, {
       layers: ['nitf-cluster-circle', 'nitf-cluster-count']
     })
     const feature = features?.[0]
     if (!feature || !map) return
     const clusterId = feature.properties?.cluster_id
+    const pointCount = Number(feature.properties?.point_count) || 50
     const source = map.getSource('nitf-waypoints') as maplibregl.GeoJSONSource
     if (source && clusterId != null) {
+      try {
+        const leaves = await source.getClusterLeaves(clusterId, Math.max(pointCount, 100), 0)
+        const points: Array<[number, number]> = []
+        if (Array.isArray(leaves)) {
+          for (const leaf of leaves) {
+            const coords = (leaf?.geometry as any)?.coordinates
+            if (Array.isArray(coords) && coords.length >= 2) {
+              points.push([Number(coords[0]), Number(coords[1])])
+            }
+          }
+        }
+        if (points.length >= 2) {
+          emit('select-cluster', points)
+          focusOn(points, lastFocusPadding)
+          return
+        }
+      } catch {
+        // Fallback to expansion zoom if getClusterLeaves fails
+      }
+
       try {
         const zoom = await source.getClusterExpansionZoom(clusterId)
         if (!map) return
         const coords = (feature.geometry as any).coordinates
         map.stop()
-        map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+        resetTransformPaddingIfNeeded()
         map.easeTo({
           center: coords,
-          zoom: Math.max(zoom || 13, 13),
+          zoom: Math.min(zoom || 12.5, 13.2),
           duration: 600
         })
       } catch {
         const coords = (feature.geometry as any).coordinates
         map.stop()
-        map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+        resetTransformPaddingIfNeeded()
         map.easeTo({
           center: coords,
-          zoom: 13,
+          zoom: 12.5,
           duration: 600
         })
       }

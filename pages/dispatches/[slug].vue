@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { calculateReadTime } from '~/utils/formatters'
+import { calculateReadTime, formatDispatchDateRange } from '~/utils/formatters'
+import { haversineKm, formatDistance } from '~/utils/geo'
+import { mockFieldNotes, mockLocations } from '~/data/mockNordicTrail'
 import type { Dispatch, Location } from '~/types/models'
 
 const route = useRoute()
@@ -33,18 +35,92 @@ const linkedLocations = computed<Location[]>(() => {
 
   for (const locRef of currentDispatch.value.locations) {
     const locId = typeof locRef === 'object' && locRef !== null ? (locRef.slug || locRef.id) : String(locRef)
-    const found = locations.value.find(l => l.slug === locId || l.id === locId)
+    const found =
+      locations.value.find(l => l.slug === locId || l.id === locId) ||
+      mockLocations.find(l => l.slug === locId || l.id === locId)
     if (found) {
       result.push(found)
+    } else {
+      const mockNote = mockFieldNotes.find(n => n.slug === locId || n.id === locId)
+      if (mockNote) {
+        result.push({
+          id: mockNote.id,
+          slug: mockNote.slug,
+          name: mockNote.title,
+          area: mockNote.areaId,
+          category: mockNote.category.toLowerCase() as any,
+          latitude: mockNote.latitude,
+          longitude: mockNote.longitude,
+          elevation: mockNote.elevation,
+          summary: mockNote.description,
+          amenities: []
+        })
+      }
     }
   }
 
   return result
 })
 
+interface DispatchLegItem {
+  index: number
+  letter: string
+  distanceKm: number
+  distanceFormatted: string
+}
+
+const dispatchLegs = computed<DispatchLegItem[]>(() => {
+  const list: DispatchLegItem[] = []
+  if (linkedLocations.value.length < 2) return list
+
+  for (let i = 0; i < linkedLocations.value.length - 1; i++) {
+    const from = linkedLocations.value[i]
+    const to = linkedLocations.value[i + 1]
+    let distKm = 0
+    if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
+      distKm = haversineKm([from.longitude, from.latitude], [to.longitude, to.latitude])
+    }
+    list.push({
+      index: i,
+      letter: String.fromCharCode(65 + i),
+      distanceKm: distKm,
+      distanceFormatted: formatDistance(distKm)
+    })
+  }
+  return list
+})
+
+function getCategoryIcon(cat?: string): string {
+  const c = (cat || '').toLowerCase()
+  if (c.includes('shelter')) return 'cabin'
+  if (c.includes('hearth') || c.includes('fire')) return 'outdoor_grill'
+  if (c.includes('spring') || c.includes('water')) return 'water_drop'
+  if (c.includes('view') || c.includes('vista') || c.includes('summit')) return 'landscape'
+  if (c.includes('trailhead') || c.includes('parking')) return 'directions_car'
+  return 'explore'
+}
+
 const readTime = computed(() => {
   if (!currentDispatch.value) return '3 MIN READ'
   return calculateReadTime(currentDispatch.value.content)
+})
+
+const publishedDateFormatted = computed(() => {
+  if (!currentDispatch.value?.publishedAt) return 'RECENT'
+  return new Date(currentDispatch.value.publishedAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
+})
+
+const expeditionDateSpanFormatted = computed(() => {
+  if (!currentDispatch.value) return ''
+  return formatDispatchDateRange(
+    currentDispatch.value.startDate,
+    currentDispatch.value.endDate,
+    currentDispatch.value.publishedAt
+  )
 })
 
 const heroImageUrl = computed(() => {
@@ -58,6 +134,26 @@ const heroImageUrl = computed(() => {
 
 const shareNotification = ref<string | null>(null)
 const activePhotoIndex = ref<number | null>(null)
+const dispatchGalleryRef = ref<HTMLElement | null>(null)
+
+function scrollDispatchGallery(direction: 'prev' | 'next') {
+  const el = dispatchGalleryRef.value
+  if (!el) return
+  const cardWidth = el.querySelector('.gallery-item')?.clientWidth || 320
+  const scrollAmount = (cardWidth + 16) * (direction === 'next' ? 1 : -1)
+  el.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+}
+
+function stepLightboxPhoto(direction: 'prev' | 'next') {
+  const gallery = currentDispatch.value?.gallery
+  if (activePhotoIndex.value === null || !gallery || gallery.length === 0) return
+  const total = gallery.length
+  if (direction === 'next') {
+    activePhotoIndex.value = (activePhotoIndex.value + 1) % total
+  } else {
+    activePhotoIndex.value = (activePhotoIndex.value - 1 + total) % total
+  }
+}
 
 function copyShareUrl() {
   if (typeof window !== 'undefined') {
@@ -71,7 +167,7 @@ function copyShareUrl() {
 
 function openInAtlas() {
   if (currentDispatch.value) {
-    router.push(`/?story=${currentDispatch.value.slug || currentDispatch.value.id}`)
+    router.push(`/?dispatch=${currentDispatch.value.slug || currentDispatch.value.id}`)
   } else {
     router.push('/')
   }
@@ -185,59 +281,108 @@ useHead({
             class="hero-img"
           />
           <div class="hero-overlay" />
-
-          <!-- Surveyor Telemetry Overlay Stamp -->
-          <div class="hero-stamp font-mono">
-            <span class="stamp-pill">
-              {{ new Date(currentDispatch.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase() }}
-            </span>
-            <span v-if="currentDispatch.weather" class="stamp-pill">
-              {{ currentDispatch.weather }}
-            </span>
-            <span class="stamp-pill">
-              {{ readTime }}
-            </span>
-          </div>
         </div>
 
         <!-- Article Header -->
         <header class="article-header">
-          <div class="metadata-row font-mono">
-            <span class="meta-item">{{ new Date(currentDispatch.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
-            <span class="meta-dot">/</span>
-            <span class="meta-item">{{ readTime }}</span>
-            <span v-if="currentDispatch.weather" class="meta-dot">/</span>
-            <span v-if="currentDispatch.weather" class="meta-item weather">{{ currentDispatch.weather }}</span>
+          <!-- Article Publication Metadata (Publish Date & Read Time) -->
+          <div class="article-meta-bar font-mono">
+            <span class="meta-item">
+              <span class="material-symbols-outlined meta-icon">calendar_today</span>
+              <span>PUBLISHED {{ publishedDateFormatted.toUpperCase() }}</span>
+            </span>
+            <span class="meta-dot">•</span>
+            <span class="meta-item">
+              <span class="material-symbols-outlined meta-icon">schedule</span>
+              <span>{{ readTime }}</span>
+            </span>
           </div>
 
           <h1 class="article-title font-serif">
             {{ currentDispatch.title }}
           </h1>
 
+          <!-- Dispatch Entry Field Telemetry (Expedition Date Span & Weather) -->
+          <div class="dispatch-entry-badges font-mono">
+            <span v-if="expeditionDateSpanFormatted" class="entry-badge expedition-dates" title="Expedition Date Span">
+              <span class="material-symbols-outlined badge-icon">date_range</span>
+              <span>EXPEDITION: {{ expeditionDateSpanFormatted }}</span>
+            </span>
+            <span v-if="currentDispatch.weather" class="entry-badge weather-cond" title="Field Weather Conditions">
+              <span class="material-symbols-outlined badge-icon">partly_cloudy_day</span>
+              <span>{{ currentDispatch.weather }}</span>
+            </span>
+          </div>
+
           <p class="article-lead font-serif">
             {{ currentDispatch.excerpt }}
           </p>
 
-          <!-- Surveyed Locations Visited on this Outing -->
+          <!-- Surveyed Locations Visited on this Outing (Dispatch Route Inspection Timeline) -->
           <div v-if="linkedLocations.length > 0" class="visited-locations-panel font-mono">
             <div class="locations-header">
-              <span class="material-symbols-outlined text-[15px] text-secondary">place</span>
-              <span class="locations-label">SURVEYED WAYPOINTS VISITED:</span>
-            </div>
-            <div class="locations-chips-row">
-              <NuxtLink
-                v-for="loc in linkedLocations"
-                :key="loc.id"
-                :to="`/locations/${loc.slug || loc.id}`"
-                class="location-chip"
+              <div class="locations-title-group">
+                <span class="material-symbols-outlined text-[15px] text-secondary">route</span>
+                <span class="locations-label">VISITED LOCATIONS ({{ linkedLocations.length }})</span>
+              </div>
+
+              <button
+                class="inspect-route-btn font-mono"
+                type="button"
+                title="Open Dispatch Route Inspection mode on the Atlas Map"
+                @click="openInAtlas"
               >
-                <span class="material-symbols-outlined chip-icon">
-                  {{ loc.category === 'shelter' ? 'cabin' : loc.category === 'viewpoint' ? 'landscape' : 'explore' }}
-                </span>
-                <span class="chip-name">{{ loc.name }}</span>
-                <span v-if="loc.elevation" class="chip-elev">{{ loc.elevation }}m</span>
-                <span class="material-symbols-outlined text-[12px] opacity-60">arrow_forward</span>
-              </NuxtLink>
+                <span class="material-symbols-outlined text-[13px]">explore</span>
+                <span>INSPECT ROUTE ON ATLAS</span>
+              </button>
+            </div>
+
+            <!-- Sequential Timeline Stepper Track (matches MobileDispatchInspectionPeek) -->
+            <div class="timeline-stepper-track scrollbar-none">
+              <div class="timeline-row">
+                <template v-for="(loc, idx) in linkedLocations" :key="loc.id">
+                  <!-- Waypoint Chip -->
+                  <NuxtLink
+                    :to="`/locations/${loc.slug || loc.id}`"
+                    class="timeline-step-chip font-mono"
+                    :title="`Open ${loc.name} survey dossier`"
+                  >
+                    <div class="step-chip-top">
+                      <div class="step-chip-meta">
+                        <span class="step-order-badge">{{ idx + 1 }}</span>
+                        <span class="material-symbols-outlined step-cat-icon">
+                          {{ getCategoryIcon(loc.category) }}
+                        </span>
+                      </div>
+                      <span v-if="loc.elevation" class="step-elev" title="Elevation">
+                        <span class="material-symbols-outlined step-elev-icon">terrain</span>
+                        <span>{{ loc.elevation }}m</span>
+                      </span>
+                    </div>
+
+                    <span class="step-title font-serif">
+                      {{ loc.name }}
+                    </span>
+                  </NuxtLink>
+
+                  <!-- Minimal Leg Connector Line between waypoints -->
+                  <div
+                    v-if="idx < linkedLocations.length - 1 && dispatchLegs[idx]"
+                    class="timeline-leg-connector font-mono"
+                    role="button"
+                    tabindex="0"
+                    :title="`Inspect Leg ${dispatchLegs[idx].letter} (${dispatchLegs[idx].distanceFormatted}) on Atlas Map`"
+                    @click="openInAtlas"
+                    @keydown.enter.prevent="openInAtlas"
+                    @keydown.space.prevent="openInAtlas"
+                  >
+                    <span class="leg-connector-line" />
+                    <span class="leg-dist-pill">
+                      <span class="leg-dist-text">{{ dispatchLegs[idx].distanceFormatted }}</span>
+                    </span>
+                  </div>
+                </template>
+              </div>
             </div>
           </div>
 
@@ -266,11 +411,32 @@ useHead({
           class="dispatch-gallery-section"
         >
           <div class="gallery-title-row font-mono">
-            <span class="material-symbols-outlined text-secondary">photo_camera</span>
-            <h2>EXPEDITION FIELD CAPTURES ({{ currentDispatch.gallery.length }})</h2>
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary">photo_camera</span>
+              <h2>EXPEDITION FIELD CAPTURES ({{ currentDispatch.gallery.length }})</h2>
+            </div>
+
+            <div v-if="currentDispatch.gallery.length > 1" class="gallery-controls">
+              <button
+                class="gallery-nav-btn"
+                type="button"
+                aria-label="Scroll photos left"
+                @click="scrollDispatchGallery('prev')"
+              >
+                <span class="material-symbols-outlined text-[16px]">chevron_left</span>
+              </button>
+              <button
+                class="gallery-nav-btn"
+                type="button"
+                aria-label="Scroll photos right"
+                @click="scrollDispatchGallery('next')"
+              >
+                <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+              </button>
+            </div>
           </div>
 
-          <div class="gallery-grid">
+          <div ref="dispatchGalleryRef" class="gallery-track">
             <figure
               v-for="(item, gIdx) in currentDispatch.gallery"
               :key="gIdx"
@@ -285,7 +451,7 @@ useHead({
                   class="gallery-img"
                 />
                 <div class="gallery-overlay">
-                  <span class="material-symbols-outlined">zoom_in</span>
+                  <span class="material-symbols-outlined zoom-icon">zoom_in</span>
                 </div>
               </div>
               <figcaption class="gallery-caption font-mono">
@@ -353,6 +519,16 @@ useHead({
           <span class="material-symbols-outlined">close</span>
         </button>
 
+        <button
+          v-if="currentDispatch.gallery.length > 1"
+          class="lightbox-nav-btn prev"
+          type="button"
+          aria-label="Previous photo"
+          @click.stop="stepLightboxPhoto('prev')"
+        >
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+
         <div class="lightbox-content" @click.stop>
           <img
             :src="typeof currentDispatch.gallery[activePhotoIndex].image === 'object' ? (currentDispatch.gallery[activePhotoIndex].image as any).url : String(currentDispatch.gallery[activePhotoIndex].image)"
@@ -361,8 +537,27 @@ useHead({
           />
           <div class="lightbox-caption font-mono">
             <p class="caption-text font-serif">{{ currentDispatch.gallery[activePhotoIndex].caption }}</p>
+            <div class="caption-sub-row">
+              <span v-if="currentDispatch.gallery[activePhotoIndex].location" class="caption-sub">
+                {{ typeof currentDispatch.gallery[activePhotoIndex].location === 'object'
+                  ? (currentDispatch.gallery[activePhotoIndex].location as any).name
+                  : currentDispatch.gallery[activePhotoIndex].location }}
+              </span>
+              <span v-else class="caption-sub">{{ currentDispatch.title }}</span>
+              <span class="caption-sub">{{ activePhotoIndex + 1 }} / {{ currentDispatch.gallery.length }}</span>
+            </div>
           </div>
         </div>
+
+        <button
+          v-if="currentDispatch.gallery.length > 1"
+          class="lightbox-nav-btn next"
+          type="button"
+          aria-label="Next photo"
+          @click.stop="stepLightboxPhoto('next')"
+        >
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
       </div>
     </Teleport>
   </div>
@@ -493,27 +688,6 @@ useHead({
   background: linear-gradient(180deg, rgba(27, 46, 36, 0.15) 0%, rgba(27, 46, 36, 0.75) 100%);
 }
 
-.hero-stamp {
-  position: absolute;
-  bottom: 16px;
-  left: 20px;
-  right: 20px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.stamp-pill {
-  background-color: rgba(27, 46, 36, 0.85);
-  color: #fef9ed;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  letter-spacing: 0.05em;
-}
-
 /* ARTICLE HEADER */
 .article-header {
   padding: 28px 24px 12px;
@@ -525,23 +699,31 @@ useHead({
   }
 }
 
-.metadata-row {
+.article-meta-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--color-tertiary, #526056);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.meta-icon {
+  font-size: 13px;
+  opacity: 0.75;
 }
 
 .meta-dot {
   color: var(--color-outline-variant, #c2c8c2);
-}
-
-.meta-item.weather {
-  color: var(--color-secondary, #d9531e);
-  font-weight: 600;
 }
 
 .article-title {
@@ -555,6 +737,45 @@ useHead({
   .article-title {
     font-size: 38px;
   }
+}
+
+.dispatch-entry-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.entry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.entry-badge.expedition-dates {
+  background-color: var(--color-surface-container, #f3ede1);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  color: var(--color-primary, #1b2e24);
+}
+
+.entry-badge.expedition-dates .badge-icon {
+  color: var(--color-secondary, #d9531e);
+}
+
+.entry-badge.weather-cond {
+  background-color: rgba(217, 83, 30, 0.1);
+  border: 1px solid rgba(217, 83, 30, 0.35);
+  color: var(--color-secondary, #d9531e);
+}
+
+.badge-icon {
+  font-size: 14px;
 }
 
 .article-lead {
@@ -576,56 +797,219 @@ useHead({
 .locations-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.locations-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
 
 .locations-label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--color-primary, #1b2e24);
+  white-space: nowrap;
 }
 
-.locations-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.location-chip {
+.inspect-route-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background-color: var(--color-surface-container-lowest, #ffffff);
-  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  gap: 4px;
+  background-color: rgba(217, 83, 30, 0.12);
+  border: 1px solid rgba(217, 83, 30, 0.4);
+  color: var(--color-secondary, #d9531e);
   border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-on-surface, #1d1c14);
-  text-decoration: none;
+  padding: 3px 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.location-chip:hover {
-  background-color: var(--color-primary, #1b2e24);
-  color: #fef9ed;
-  border-color: var(--color-primary, #1b2e24);
+.inspect-route-btn:hover {
+  background-color: var(--color-secondary, #d9531e);
+  color: #ffffff;
+  border-color: var(--color-secondary, #d9531e);
 }
 
-.chip-icon {
-  font-size: 14px;
+/* TIMELINE STEPPER (matches MobileDispatchInspectionPeek) */
+.timeline-stepper-track {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 0 6px;
+}
+
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: min-content;
+}
+
+.timeline-step-chip {
+  position: relative;
+  background-color: var(--color-surface-container-low, #f8f3e7);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  user-select: none;
+  box-sizing: border-box;
+  width: 132px;
+  min-width: 120px;
+  max-width: 148px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.timeline-step-chip:hover {
+  background-color: #fef9ed;
+  border-color: var(--color-secondary, #d9531e);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(217, 83, 30, 0.14);
+}
+
+.step-chip-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 4px;
+}
+
+.step-chip-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-order-badge {
+  background-color: var(--color-secondary, #d9531e);
+  color: #ffffff;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.step-cat-icon {
+  font-size: 13px;
+  color: var(--color-primary, #1b2e24);
+  flex-shrink: 0;
+}
+
+.step-elev {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-tertiary, #526056);
+  flex-shrink: 0;
+  background-color: rgba(82, 96, 86, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.step-elev-icon {
+  font-size: 11px;
+  line-height: 1;
   color: var(--color-secondary, #d9531e);
 }
 
-.location-chip:hover .chip-icon {
-  color: #fef9ed;
+.step-title {
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--color-on-surface, #1d1c14);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: left;
 }
 
-.chip-elev {
-  font-size: 9px;
-  opacity: 0.6;
+.timeline-leg-connector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 5px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.leg-connector-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 0;
+  border-top: 1.5px dashed var(--color-outline-variant, #c2c8c2);
+  transition: all 0.16s ease;
+}
+
+.timeline-leg-connector:hover .leg-connector-line {
+  border-top-color: var(--color-secondary, #d9531e);
+}
+
+.leg-dist-pill {
+  position: relative;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 9999px;
+  background-color: var(--color-surface-container-low, #f8f3e7);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  box-shadow: 0 1px 2px rgba(27, 46, 36, 0.08);
+  transition: all 0.16s ease;
+}
+
+.timeline-leg-connector:hover .leg-dist-pill {
+  background-color: #fef9ed;
+  border-color: var(--color-secondary, #d9531e);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(217, 83, 30, 0.16);
+}
+
+.leg-dist-text {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--color-tertiary, #526056);
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.timeline-leg-connector:hover .leg-dist-text {
+  color: var(--color-secondary, #d9531e);
 }
 
 .article-divider {
@@ -676,6 +1060,7 @@ useHead({
 .gallery-title-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   border-bottom: 1px solid var(--color-outline-variant, #c2c8c2);
   padding-bottom: 10px;
@@ -689,25 +1074,92 @@ useHead({
   color: var(--color-primary, #1b2e24);
 }
 
-.gallery-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+.gallery-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
-@media (min-width: 640px) {
-  .gallery-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.gallery-nav-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-surface-container-low, #f8f3e7);
+  border: 1px solid var(--color-outline-variant, #c2c8c2);
+  border-radius: 4px;
+  color: var(--color-primary, #1b2e24);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gallery-nav-btn:hover {
+  background-color: var(--color-surface-container, #f3ede1);
+  border-color: var(--color-secondary, #d9531e);
+  color: var(--color-secondary, #d9531e);
+}
+
+.gallery-track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-outline-variant, #c2c8c2) transparent;
+}
+
+.gallery-track::-webkit-scrollbar {
+  height: 6px;
+}
+
+.gallery-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gallery-track::-webkit-scrollbar-thumb {
+  background-color: var(--color-outline-variant, #c2c8c2);
+  border-radius: 999px;
 }
 
 .gallery-item {
+  flex: 0 0 82%;
+  max-width: 340px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
   background-color: var(--color-surface-container, #f3ede1);
   border: 1px solid var(--color-outline-variant, #c2c8c2);
   border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
   margin: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gallery-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+@media (min-width: 640px) {
+  .gallery-item {
+    flex: 0 0 300px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gallery-item {
+    flex: 0 0 320px;
+  }
+}
+
+.zoom-icon {
+  color: #ffffff;
+  font-size: 28px;
 }
 
 .gallery-img-wrap {
@@ -881,6 +1333,49 @@ useHead({
 .lightbox-caption {
   margin-top: 12px;
   color: #fef9ed;
+}
+
+.caption-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.caption-sub {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.lightbox-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(254, 249, 237, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.lightbox-nav-btn:hover {
+  background: rgba(217, 83, 30, 0.85);
+  border-color: #d9531e;
+}
+
+.lightbox-nav-btn.prev {
+  left: 20px;
+}
+
+.lightbox-nav-btn.next {
+  right: 20px;
 }
 
 /* TOAST */
