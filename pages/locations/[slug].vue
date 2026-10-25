@@ -10,6 +10,9 @@ import {
 } from '~/utils/formatters'
 import type { Location, Dispatch } from '~/types/models'
 import ElevationProfile from '~/components/atoms/ElevationProfile.vue'
+import { useTrailheadNav } from '~/composables/useTrailheadNav'
+
+const { openTrailheadModal } = useTrailheadNav()
 
 const route = useRoute()
 const router = useRouter()
@@ -73,13 +76,12 @@ function handleNavigateTrailhead() {
   const lng = typeof th === 'object' ? th.longitude : null
   if (lat == null || lng == null) return
 
-  if (typeof window !== 'undefined') {
-    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-    const url = isApple
-      ? `maps://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-    window.open(url, '_blank')
-  }
+  openTrailheadModal({
+    trailheadName: (typeof th === 'object' && th.name) ? th.name : `${currentLocation.value?.name || 'Waypoint'} Trailhead`,
+    locationName: currentLocation.value?.name,
+    lat,
+    lng
+  })
 }
 
 function openInAtlasMap() {
@@ -155,11 +157,7 @@ useHead({
     <!-- Top Sticky Surveyor Navigation Bar -->
     <header class="location-nav">
       <div class="nav-container">
-        <button
-          class="nav-back-btn font-mono"
-          type="button"
-          @click="openInAtlasMap"
-        >
+        <button class="nav-back-btn font-mono" type="button" @click="openInAtlasMap">
           <span class="material-symbols-outlined text-[16px]">arrow_back</span>
           <span>ATLAS MAP</span>
         </button>
@@ -172,12 +170,7 @@ useHead({
           <span class="crumb-active">{{ currentLocation?.name || 'SURVEY' }}</span>
         </div>
 
-        <button
-          class="nav-share-btn font-mono"
-          type="button"
-          title="Share Location"
-          @click="copyShareUrl"
-        >
+        <button class="nav-share-btn font-mono" type="button" title="Share Location" @click="copyShareUrl">
           <span class="material-symbols-outlined text-[15px]">share</span>
           <span class="share-text">SHARE</span>
         </button>
@@ -189,11 +182,7 @@ useHead({
       <!-- Hero Topographic Banner -->
       <section class="hero-section">
         <div class="hero-media-wrapper">
-          <img
-            :src="coverImageUrl"
-            :alt="currentLocation.name"
-            class="hero-image"
-          />
+          <img :src="coverImageUrl" :alt="currentLocation.name" class="hero-image" />
           <div class="hero-overlay" />
 
           <!-- Surveyor Telemetry Overlay Stamp -->
@@ -231,28 +220,21 @@ useHead({
           </h1>
 
           <p class="location-summary font-serif">
-            {{ currentLocation.summary || 'Tactile surveyed backcountry waypoint with field amenities and trail access.' }}
+            {{ currentLocation.summary || 'Tactile surveyed backcountry waypoint with field amenities and trail access.'
+            }}
           </p>
 
           <!-- Action Bar: View on Map + Navigate to Trailhead -->
           <div class="actions-bar">
-            <button
-              class="primary-action-btn font-mono"
-              type="button"
-              @click="openInAtlasMap"
-            >
+            <button class="primary-action-btn font-mono" type="button" @click="openInAtlasMap">
               <span class="material-symbols-outlined text-[16px]">map</span>
               <span>VIEW ON ATLAS MAP</span>
             </button>
 
-            <button
-              v-if="currentLocation.trailhead"
-              class="secondary-action-btn font-mono"
-              type="button"
-              @click="handleNavigateTrailhead"
-            >
-              <span class="material-symbols-outlined text-[16px]">directions_car</span>
-              <span>TRAILHEAD PARKING</span>
+            <button v-if="currentLocation.trailhead" class="secondary-action-btn font-mono" type="button"
+              @click="handleNavigateTrailhead">
+              <span class="material-symbols-outlined text-[16px]">directions</span>
+              <span>NAVIGATE TO TRAILHEAD</span>
             </button>
           </div>
         </div>
@@ -268,11 +250,7 @@ useHead({
           </div>
 
           <div v-if="currentLocation.amenities && currentLocation.amenities.length > 0" class="amenities-list">
-            <div
-              v-for="(amenity, idx) in currentLocation.amenities"
-              :key="idx"
-              class="amenity-item"
-            >
+            <div v-for="(amenity, idx) in currentLocation.amenities" :key="idx" class="amenity-item">
               <div class="amenity-icon-wrapper">
                 <span class="material-symbols-outlined">{{ getAmenityMeta(amenity).icon }}</span>
               </div>
@@ -295,36 +273,34 @@ useHead({
             <h2>TRAILHEAD ACCESS & TOPOGRAPHY</h2>
           </div>
 
-          <div v-if="currentLocation.trailhead && typeof currentLocation.trailhead === 'object'" class="trailhead-box font-mono">
+          <div v-if="currentLocation.trailhead && typeof currentLocation.trailhead === 'object'"
+            class="trailhead-box font-mono">
             <div class="th-row">
               <span class="th-label">STARTING TRAILHEAD:</span>
               <span class="th-val">{{ currentLocation.trailhead.name }}</span>
             </div>
             <div class="th-row">
               <span class="th-label">COORDINATES:</span>
-              <span class="th-val">{{ formatCoordinates(currentLocation.trailhead.latitude, currentLocation.trailhead.longitude) }}</span>
+              <span class="th-val">{{ formatCoordinates(currentLocation.trailhead.latitude,
+                currentLocation.trailhead.longitude) }}</span>
             </div>
             <div v-if="currentLocation.elevationGain" class="th-row">
               <span class="th-label">ASCENT / DESCENT:</span>
-              <span class="th-val">+{{ currentLocation.elevationGain }}m / -{{ currentLocation.elevationLoss || 0 }}m</span>
+              <span class="th-val">+{{ currentLocation.elevationGain }}m / -{{ currentLocation.elevationLoss || 0
+              }}m</span>
             </div>
           </div>
 
           <!-- Topographic Elevation Profile Graph -->
-          <div v-if="currentLocation.trailhead && typeof currentLocation.trailhead === 'object' && currentLocation.elevationGain" class="elevation-profile-container">
+          <div
+            v-if="currentLocation.trailhead && typeof currentLocation.trailhead === 'object' && currentLocation.elevationGain"
+            class="elevation-profile-container">
             <ElevationProfile
               :start-elevation="currentLocation.trailhead.elevationGain ? (currentLocation.elevation || 300) - currentLocation.elevationGain : 240"
               :destination-elevation="currentLocation.elevation || 340"
-              :elevation-gain="currentLocation.elevationGain || 0"
-              :elevation-loss="currentLocation.elevationLoss || 0"
-              :distance-km="2.0"
-              :trailhead-name="currentLocation.trailhead.name"
-              :destination-name="currentLocation.name"
-            />
-          </div>
-          <div v-else class="trailhead-hint font-mono">
-            <span class="material-symbols-outlined">explore</span>
-            <span>Direct backcountry cross-country coordinates. Consult topographic map for off-trail approaches.</span>
+              :elevation-gain="currentLocation.elevationGain || 0" :elevation-loss="currentLocation.elevationLoss || 0"
+              :distance-km="2.0" :trailhead-name="currentLocation.trailhead.name"
+              :destination-name="currentLocation.name" />
           </div>
         </div>
       </section>
@@ -336,23 +312,12 @@ useHead({
             <span class="material-symbols-outlined text-secondary">photo_camera</span>
             <h2>SURVEY PHOTO ARCHIVE ({{ photoArchive.length }})</h2>
           </div>
-          <span class="text-xs text-muted">DOCUMENTED ACROSS EXPEDITIONS</span>
         </div>
 
         <div v-if="photoArchive.length > 0" class="photo-grid">
-          <div
-            v-for="(photo, idx) in photoArchive"
-            :key="idx"
-            class="photo-card"
-            @click="activePhotoIndex = idx"
-          >
+          <div v-for="(photo, idx) in photoArchive" :key="idx" class="photo-card" @click="activePhotoIndex = idx">
             <div class="photo-img-wrapper">
-              <img
-                :src="photo.url"
-                :alt="photo.alt"
-                loading="lazy"
-                class="photo-img"
-              />
+              <img :src="photo.url" :alt="photo.alt" loading="lazy" class="photo-img" />
               <div class="photo-card-overlay">
                 <span class="material-symbols-outlined zoom-icon">zoom_in</span>
               </div>
@@ -362,14 +327,17 @@ useHead({
               <p class="photo-caption">{{ photo.caption || photo.alt }}</p>
               <div class="photo-meta">
                 <span class="meta-trip">{{ photo.dispatchTitle }}</span>
-                <span class="meta-date">{{ photo.publishedAt ? new Date(photo.publishedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Field Survey' }}</span>
+                <span class="meta-date">{{ photo.publishedAt ? new Date(photo.publishedAt).toLocaleDateString('en-US', {
+                  month: 'short', year: 'numeric'
+                }) : 'Field Survey' }}</span>
               </div>
             </div>
           </div>
         </div>
         <div v-else class="photo-empty font-mono">
           <span class="material-symbols-outlined">image_not_supported</span>
-          <p>No field photos cataloged for this location yet. New photos automatically appear when linked in dispatches.</p>
+          <p>No field photos cataloged for this location yet. New photos automatically appear when linked in dispatches.
+          </p>
         </div>
       </section>
 
@@ -380,17 +348,15 @@ useHead({
             <span class="material-symbols-outlined text-secondary">menu_book</span>
             <h2>FIELD DISPATCH LOG ({{ visitData.dispatches.length }})</h2>
           </div>
-          <span class="text-xs text-muted">CHRONOLOGICAL ENTRIES PASSING THIS SPOT</span>
         </div>
 
         <div v-if="visitData.dispatches.length > 0" class="dispatches-grid">
-          <article
-            v-for="dispatch in visitData.dispatches"
-            :key="dispatch.id"
-            class="dispatch-entry-card"
-          >
+          <article v-for="dispatch in visitData.dispatches" :key="dispatch.id" class="dispatch-entry-card">
             <div class="dispatch-header font-mono">
-              <span class="dispatch-date">{{ new Date(dispatch.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}</span>
+              <span class="dispatch-date">{{ new Date(dispatch.publishedAt).toLocaleDateString('en-US', {
+                month:
+                  'short', day: 'numeric', year: 'numeric'
+              }) }}</span>
               <span class="dispatch-weather">{{ dispatch.weather || '4°C • MIST' }}</span>
             </div>
 
@@ -423,11 +389,7 @@ useHead({
         <div class="cta-inner font-mono">
           <span class="cta-stamp">READY FOR BACKCOUNTRY EXPLORATION?</span>
           <h2 class="cta-headline font-serif">Open {{ currentLocation.name }} in the Interactive Atlas</h2>
-          <button
-            class="cta-btn font-mono"
-            type="button"
-            @click="openInAtlasMap"
-          >
+          <button class="cta-btn font-mono" type="button" @click="openInAtlasMap">
             <span class="material-symbols-outlined">explore</span>
             <span>LAUNCH ATLAS MAP CANVAS</span>
           </button>
@@ -458,29 +420,25 @@ useHead({
 
     <!-- Photo Lightbox Modal -->
     <Teleport to="body">
-      <div
-        v-if="activePhotoIndex !== null && photoArchive[activePhotoIndex]"
-        class="lightbox-overlay"
-        @click="activePhotoIndex = null"
-      >
-        <button
-          class="lightbox-close font-mono"
-          type="button"
-          aria-label="Close photo"
-          @click.stop="activePhotoIndex = null"
-        >
+      <div v-if="activePhotoIndex !== null && photoArchive[activePhotoIndex]" class="lightbox-overlay"
+        @click="activePhotoIndex = null">
+        <button class="lightbox-close font-mono" type="button" aria-label="Close photo"
+          @click.stop="activePhotoIndex = null">
           <span class="material-symbols-outlined">close</span>
         </button>
 
         <div class="lightbox-content" @click.stop>
-          <img
-            :src="photoArchive[activePhotoIndex].url"
-            :alt="photoArchive[activePhotoIndex].alt"
-            class="lightbox-image"
-          />
+          <img :src="photoArchive[activePhotoIndex].url" :alt="photoArchive[activePhotoIndex].alt"
+            class="lightbox-image" />
           <div class="lightbox-caption font-mono">
-            <p class="caption-text font-serif">{{ photoArchive[activePhotoIndex].caption || photoArchive[activePhotoIndex].alt }}</p>
-            <span class="caption-sub">{{ photoArchive[activePhotoIndex].dispatchTitle }} • {{ photoArchive[activePhotoIndex].publishedAt ? new Date(photoArchive[activePhotoIndex].publishedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Field Survey' }}</span>
+            <p class="caption-text font-serif">{{ photoArchive[activePhotoIndex].caption ||
+              photoArchive[activePhotoIndex].alt }}</p>
+            <span class="caption-sub">{{ photoArchive[activePhotoIndex].dispatchTitle }} • {{
+              photoArchive[activePhotoIndex].publishedAt ? new
+                Date(photoArchive[activePhotoIndex].publishedAt).toLocaleDateString('en-US', {
+                  month: 'short', year:
+                    'numeric'
+                }) : 'Field Survey' }}</span>
           </div>
         </div>
       </div>

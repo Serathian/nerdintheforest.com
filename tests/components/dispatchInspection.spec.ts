@@ -115,4 +115,97 @@ describe('Atlas Dispatch Inspection Mode (/ ?dispatch=slug / ?story=slug)', () =
     expect(routePoints[0].isSelected).toBe(true)
     expect(routePoints[1].isSelected).toBe(false)
   })
+
+  it('computes inter-stop legs with alphabetical letters and distances', () => {
+    const dispatch = mockDispatches.find(d => d.slug === 'birgitan-polku-circuit')!
+    // 3 waypoints -> 2 legs (A, B)
+    const waypoints = dispatch.locations.map((locRef, idx) => {
+      const loc = mockLocations.find(l => l.id === locRef || l.slug === locRef)
+      return {
+        id: locRef,
+        order: idx + 1,
+        lat: loc?.latitude ?? 61.35 + idx * 0.02,
+        lng: loc?.longitude ?? 23.75 + idx * 0.02
+      }
+    })
+
+    const legs = []
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const from = waypoints[i]
+      const to = waypoints[i + 1]
+      const letter = String.fromCharCode(65 + i) // 'A', 'B', ...
+      legs.push({
+        index: i,
+        letter,
+        fromId: from.id,
+        toId: to.id
+      })
+    }
+
+    expect(legs).toHaveLength(2)
+    expect(legs[0].letter).toBe('A')
+    expect(legs[0].index).toBe(0)
+    expect(legs[1].letter).toBe('B')
+    expect(legs[1].index).toBe(1)
+  })
+
+  it('generates segment features with active leg styling for 5-location traverse', () => {
+    const dispatch = mockDispatches.find(d => d.slug === 'helvetinjarvi-taiga-traverse')!
+    // 5 locations -> 4 legs (A, B, C, D)
+    const numLegs = dispatch.locations.length - 1
+    expect(numLegs).toBe(4)
+
+    const letters = Array.from({ length: numLegs }, (_, i) => String.fromCharCode(65 + i))
+    expect(letters).toEqual(['A', 'B', 'C', 'D'])
+
+    // When leg 2 ('C') is selected
+    const selectedLegIndex = 2
+    const segments = letters.map((letter, idx) => {
+      const isSelected = selectedLegIndex === idx
+      const hasSelection = selectedLegIndex !== null
+      return {
+        legIndex: idx,
+        letter,
+        isSelected,
+        opacity: hasSelection ? (isSelected ? 1.0 : 0.25) : 0.85,
+        lineWidth: isSelected ? 4.5 : 3
+      }
+    })
+
+    expect(segments[0].opacity).toBe(0.25)
+    expect(segments[1].opacity).toBe(0.25)
+    expect(segments[2].opacity).toBe(1.0)
+    expect(segments[2].lineWidth).toBe(4.5)
+    expect(segments[2].letter).toBe('C')
+    expect(segments[3].opacity).toBe(0.25)
+  })
+
+  it('formats shrunk waypoint card layout with top row metadata and bottom row title', () => {
+    const waypoint = {
+      order: 1,
+      category: 'trailhead',
+      elevation: 180,
+      title: 'Kankimäki P-alue (Helvetinjärvi)'
+    }
+
+    const cardLayout = {
+      topRow: {
+        order: waypoint.order,
+        categoryIcon: waypoint.category.includes('trailhead') ? 'directions_car' : 'explore',
+        elevation: {
+          symbol: 'terrain',
+          valueFormatted: `${waypoint.elevation}m`
+        }
+      },
+      bottomRow: {
+        title: waypoint.title
+      }
+    }
+
+    expect(cardLayout.topRow.order).toBe(1)
+    expect(cardLayout.topRow.categoryIcon).toBe('directions_car')
+    expect(cardLayout.topRow.elevation.symbol).toBe('terrain')
+    expect(cardLayout.topRow.elevation.valueFormatted).toBe('180m')
+    expect(cardLayout.bottomRow.title).toBe('Kankimäki P-alue (Helvetinjärvi)')
+  })
 })

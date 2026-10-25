@@ -55,6 +55,7 @@ interface Props {
   zoom?: number
   userLocation?: [number, number] | null
   inspectedRoute?: InspectedRoute | null
+  selectedLegIndex?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -63,12 +64,15 @@ const props = withDefaults(defineProps<Props>(), {
   zoom: 12.2,
   trailhead: null,
   userLocation: null,
-  inspectedRoute: null
+  inspectedRoute: null,
+  selectedLegIndex: null
 })
 
 const emit = defineEmits<{
   (e: 'select-waypoint', id: string): void
+  (e: 'select-leg', index: number): void
   (e: 'map-click'): void
+  (e: 'ready'): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
@@ -135,49 +139,79 @@ function buildWaypointsGeoJSON(waypoints: Waypoint[], selectedId?: string, inspe
   }
 }
 
-function buildInspectedRouteLineGeoJSON(route?: InspectedRoute | null) {
+function buildInspectedRouteLineGeoJSON(route?: InspectedRoute | null, selectedLegIndex?: number | null) {
   if (!route || !route.waypoints || route.waypoints.length < 2) return EMPTY_FC
 
-  const coords = route.geometry && route.geometry.length >= 2
-    ? route.geometry
-    : [...route.waypoints].sort((a, b) => a.order - b.order).map(w => [w.lng, w.lat] as [number, number])
+  const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
+  const features: any[] = []
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const isSelected = selectedLegIndex === i
+    const hasLegSelection = selectedLegIndex !== null && selectedLegIndex !== undefined
+    const opacity = hasLegSelection ? (isSelected ? 1.0 : 0.25) : 0.85
+    const lineWidth = isSelected ? 4.5 : 2.5
+    const casingWidth = isSelected ? 7 : 4.5
+
+    features.push({
+      type: 'Feature' as const,
+      properties: {
+        legIndex: i,
+        letter: String.fromCharCode(65 + i),
+        isSelected,
+        opacity,
+        lineWidth,
+        casingWidth
+      },
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [
+          [sorted[i].lng, sorted[i].lat],
+          [sorted[i + 1].lng, sorted[i + 1].lat]
+        ]
+      }
+    })
+  }
 
   return {
     type: 'FeatureCollection' as const,
-    features: [
-      {
-        type: 'Feature' as const,
-        properties: {
-          title: route.title
-        },
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: coords
-        }
-      }
-    ]
+    features
   }
 }
 
-function buildInspectedRoutePointsGeoJSON(route?: InspectedRoute | null, selectedId?: string) {
+function buildInspectedRoutePointsGeoJSON(
+  route?: InspectedRoute | null,
+  selectedId?: string,
+  selectedLegIndex?: number | null
+) {
   if (!route || !route.waypoints || route.waypoints.length === 0) return EMPTY_FC
+
+  const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
+  const hasLegSelection = selectedLegIndex !== null && selectedLegIndex !== undefined
 
   return {
     type: 'FeatureCollection' as const,
-    features: route.waypoints.map(wp => ({
-      type: 'Feature' as const,
-      properties: {
-        id: wp.id,
-        title: wp.title,
-        order: wp.order,
-        orderStr: String(wp.order),
-        isSelected: wp.id === selectedId || (wp as any).slug === selectedId
-      },
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [wp.lng, wp.lat] as [number, number]
+    features: sorted.map((wp, idx) => {
+      const isLegEndpoint = hasLegSelection && (idx === selectedLegIndex || idx === selectedLegIndex + 1)
+      const isSelected = wp.id === selectedId || (wp as any).slug === selectedId || isLegEndpoint
+      const opacity = hasLegSelection ? (isLegEndpoint ? 1.0 : 0.35) : 1.0
+
+      return {
+        type: 'Feature' as const,
+        properties: {
+          id: wp.id,
+          title: wp.title,
+          order: wp.order,
+          orderStr: String(wp.order),
+          isSelected,
+          isLegEndpoint,
+          opacity
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [wp.lng, wp.lat] as [number, number]
+        }
       }
-    }))
+    })
   }
 }
 
@@ -206,6 +240,7 @@ import { loadSavedCamera, saveCameraState, hasSavedCamera } from '~/utils/mapCam
 
 // Reactive cache for dynamically fetched hiking trail geometries
 const dynamicTrailRoutes = ref<Record<string, Array<[number, number]>>>({})
+let lastFocusPadding: Partial<MapFocusPadding> | undefined = undefined
 
 async function fetchDynamicHikingTrail(selectedId: string, from: [number, number], to: [number, number]) {
   if (dynamicTrailRoutes.value[selectedId]) return
@@ -215,10 +250,15 @@ async function fetchDynamicHikingTrail(selectedId: string, from: [number, number
     if (!res.ok) return
     const data = await res.json()
     if (data.code === 'Ok' && data.routes?.[0]?.geometry?.coordinates?.length) {
-      dynamicTrailRoutes.value[selectedId] = data.routes[0].geometry.coordinates
+      const coords: Array<[number, number]> = data.routes[0].geometry.coordinates
+      dynamicTrailRoutes.value[selectedId] = coords
       if (map && map.getSource('nitf-trailhead-link')) {
         setSourceData('nitf-trailhead', buildTrailheadGeoJSON(props.trailhead))
         setSourceData('nitf-trailhead-link', buildTrailheadLinkGeoJSON(props.trailhead))
+      }
+      // If this waypoint is still the active selection, re-frame to include the full fetched trail
+      if (props.selectedId === selectedId && !props.inspectedRoute) {
+        focusOn([from, to, ...coords], lastFocusPadding)
       }
     }
   } catch (_) {
@@ -355,7 +395,7 @@ onMounted(() => {
         },
         'nitf-waypoints': {
           type: 'geojson',
-          data: buildWaypointsGeoJSON(props.waypoints, props.selectedId),
+          data: buildWaypointsGeoJSON(props.waypoints, props.selectedId, props.inspectedRoute),
           cluster: true,
           clusterMaxZoom: 12,
           clusterRadius: 50,
@@ -377,11 +417,11 @@ onMounted(() => {
         },
         'nitf-inspected-route-line': {
           type: 'geojson',
-          data: buildInspectedRouteLineGeoJSON(props.inspectedRoute)
+          data: buildInspectedRouteLineGeoJSON(props.inspectedRoute, props.selectedLegIndex)
         },
         'nitf-inspected-route-points': {
           type: 'geojson',
-          data: buildInspectedRoutePointsGeoJSON(props.inspectedRoute, props.selectedId)
+          data: buildInspectedRoutePointsGeoJSON(props.inspectedRoute, props.selectedId, props.selectedLegIndex)
         }
       },
       layers: [
@@ -415,16 +455,16 @@ onMounted(() => {
             'raster-opacity': 0.95
           }
         },
-        // 3a. MAP LAYER: Inspected Route Link — casing
+        // 3a. MAP LAYER: Inspected Route Casing
         {
-          id: 'nitf-inspected-route-casing',
+          id: 'nitf-inspected-route-line-casing',
           type: 'line',
           source: 'nitf-inspected-route-line',
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': '#fef9ed',
-            'line-width': 7,
-            'line-opacity': 0.9
+            'line-width': ['coalesce', ['get', 'casingWidth'], 5],
+            'line-opacity': ['coalesce', ['get', 'opacity'], 0.85]
           }
         },
         // 3b. MAP LAYER: Inspected Route Link — dashed orienteering vector
@@ -435,8 +475,9 @@ onMounted(() => {
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
             'line-color': '#d9531e',
-            'line-width': 3,
-            'line-dasharray': [3, 2]
+            'line-width': ['coalesce', ['get', 'lineWidth'], 3],
+            'line-dasharray': [3, 2],
+            'line-opacity': ['coalesce', ['get', 'opacity'], 0.85]
           }
         },
         // 3c. MAP LAYER: Trailhead approach link — parchment casing under the dashed line
@@ -666,7 +707,9 @@ onMounted(() => {
               ['==', ['get', 'isSelected'], true],
               '#d9531e',
               '#fef9ed'
-            ]
+            ],
+            'circle-opacity': ['coalesce', ['get', 'opacity'], 1.0],
+            'circle-stroke-opacity': ['coalesce', ['get', 'opacity'], 1.0]
           }
         },
         // 6b. MAP LAYER: Inspected Route Sequential Number Badge Text
@@ -689,7 +732,8 @@ onMounted(() => {
             'text-ignore-placement': true
           },
           paint: {
-            'text-color': '#ffffff'
+            'text-color': '#ffffff',
+            'text-opacity': ['coalesce', ['get', 'opacity'], 1.0]
           }
         },
         // 8. MAP LAYER: User Current Location Outer Pulse Halo
@@ -784,6 +828,19 @@ onMounted(() => {
     }
   })
 
+  // Click handler for route legs (deduplicated across line + casing layers)
+  let lastLegClickEvent: Event | null = null
+  const handleLegRouteClick = (e: any) => {
+    if (e.originalEvent && e.originalEvent === lastLegClickEvent) return
+    lastLegClickEvent = e.originalEvent || null
+    const feature = e.features?.[0]
+    if (feature?.properties?.legIndex != null) {
+      emit('select-leg', Number(feature.properties.legIndex))
+    }
+  }
+  map.on('click', 'nitf-inspected-route-line', handleLegRouteClick)
+  map.on('click', 'nitf-inspected-route-line-casing', handleLegRouteClick)
+
   // Cluster click: zoom in to expand the cluster
   const handleClusterClick = async (e: any) => {
     const features = map?.queryRenderedFeatures(e.point, {
@@ -832,7 +889,9 @@ onMounted(() => {
         'nitf-cluster-circle',
         'nitf-cluster-count',
         'nitf-inspected-route-badge-bg',
-        'nitf-inspected-route-badge-text'
+        'nitf-inspected-route-badge-text',
+        'nitf-inspected-route-line',
+        'nitf-inspected-route-line-casing'
       ]
     })
     if (!features || features.length === 0) {
@@ -858,12 +917,27 @@ onMounted(() => {
   map.on('mouseleave', 'nitf-inspected-route-badge-bg', resetPointer)
   map.on('mouseenter', 'nitf-inspected-route-badge-text', setPointer)
   map.on('mouseleave', 'nitf-inspected-route-badge-text', resetPointer)
+  map.on('mouseenter', 'nitf-inspected-route-line', setPointer)
+  map.on('mouseleave', 'nitf-inspected-route-line', resetPointer)
+  map.on('mouseenter', 'nitf-inspected-route-line-casing', setPointer)
+  map.on('mouseleave', 'nitf-inspected-route-line-casing', resetPointer)
 
   window.addEventListener('resize', handleResize)
-  
+
   nextTick(() => {
+    if (pendingFocus) {
+      const p = pendingFocus
+      pendingFocus = null
+      focusOn(p.points, p.padding)
+    }
+    emit('ready')
     setTimeout(() => {
       map?.resize()
+      if (pendingFocus) {
+        const p = pendingFocus
+        pendingFocus = null
+        focusOn(p.points, p.padding)
+      }
     }, 100)
   })
 
@@ -917,14 +991,22 @@ function updateMapLayersData() {
   setSourceData('nitf-user-location', buildUserLocationGeoJSON(props.userLocation))
   setSourceData('nitf-trailhead', buildTrailheadGeoJSON(props.trailhead))
   setSourceData('nitf-trailhead-link', buildTrailheadLinkGeoJSON(props.trailhead))
-  setSourceData('nitf-inspected-route-line', buildInspectedRouteLineGeoJSON(props.inspectedRoute))
-  setSourceData('nitf-inspected-route-points', buildInspectedRoutePointsGeoJSON(props.inspectedRoute, props.selectedId))
+  setSourceData('nitf-inspected-route-line', buildInspectedRouteLineGeoJSON(props.inspectedRoute, props.selectedLegIndex))
+  setSourceData('nitf-inspected-route-points', buildInspectedRoutePointsGeoJSON(props.inspectedRoute, props.selectedId, props.selectedLegIndex))
+}
+
+function resetTransformPaddingIfNeeded() {
+  if (!map) return
+  const current = map.getPadding()
+  if (current.top !== 0 || current.bottom !== 0 || current.left !== 0 || current.right !== 0) {
+    map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+  }
 }
 
 function flyToWaypoint(lng: number, lat: number) {
   if (!map) return
   map.stop()
-  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+  resetTransformPaddingIfNeeded()
   map.flyTo({
     center: [lng, lat],
     zoom: 13.5,
@@ -935,12 +1017,8 @@ function flyToWaypoint(lng: number, lat: number) {
 
 function flyToCoordinates(lng: number, lat: number, zoom = 14) {
   if (!map) return
-  if (!map.loaded()) {
-    map.once('load', () => flyToCoordinates(lng, lat, zoom))
-    return
-  }
   map.stop()
-  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+  resetTransformPaddingIfNeeded()
   map.flyTo({
     center: [lng, lat],
     zoom,
@@ -957,23 +1035,45 @@ function flyToCoordinates(lng: number, lat: number, zoom = 14) {
  */
 function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadding>) {
   if (points.length === 0) return
+  lastFocusPadding = padding
   if (!map) {
     pendingFocus = { points, padding }
     return
   }
-  if (!map.isStyleLoaded()) {
-    map.once('load', () => focusOn(points, padding))
+
+  // When focusing a selected waypoint with a trailhead, also include any cached/pre-mapped trail geometry
+  let effectivePoints = points
+  if (props.selectedId && props.trailhead && !props.inspectedRoute) {
+    const trail = props.trailhead.trailGeometry || dynamicTrailRoutes.value[props.selectedId]
+    if (trail && trail.length > 0) {
+      effectivePoints = [...points, ...trail]
+    }
+  }
+
+  const canvas = map.getCanvas()
+  if (
+    canvas.clientWidth === 0 ||
+    canvas.clientHeight === 0 ||
+    canvas.clientWidth !== map.transform.width ||
+    canvas.clientHeight !== map.transform.height
+  ) {
+    map.resize()
+  }
+
+  const w = canvas.clientWidth
+  const h = canvas.clientHeight
+  if (w === 0 || h === 0) {
+    pendingFocus = { points, padding }
     return
   }
+
+  pendingFocus = null
   map.stop()
-  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 })
+  resetTransformPaddingIfNeeded()
 
   const pad: MapFocusPadding = { top: 0, bottom: 0, left: 0, right: 0, ...padding }
 
   // Never let padding exceed the canvas, or MapLibre refuses to fit
-  const canvas = map.getCanvas()
-  const w = canvas.clientWidth
-  const h = canvas.clientHeight
   if (pad.left + pad.right > w - 40) pad.left = pad.right = Math.max(0, (w - 40) / 2)
   if (pad.top + pad.bottom > h - 40) {
     const scale = Math.max(0, h - 40) / (pad.top + pad.bottom)
@@ -981,13 +1081,13 @@ function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadd
     pad.bottom = Math.round(pad.bottom * scale)
   }
 
-  if (points.length === 1) {
+  if (effectivePoints.length === 1) {
     const offset: [number, number] = [
       Math.round((pad.left - pad.right) / 2),
       Math.round((pad.top - pad.bottom) / 2)
     ]
     map.flyTo({
-      center: points[0],
+      center: effectivePoints[0],
       zoom: 13.5,
       offset,
       duration: 1200,
@@ -996,10 +1096,15 @@ function focusOn(points: Array<[number, number]>, padding?: Partial<MapFocusPadd
     return
   }
 
-  const bounds = points.reduce(
-    (b, p) => b.extend(p),
-    new maplibregl.LngLatBounds(points[0], points[0])
-  )
+  const minLng = Math.min(...effectivePoints.map(p => p[0]))
+  const maxLng = Math.max(...effectivePoints.map(p => p[0]))
+  const minLat = Math.min(...effectivePoints.map(p => p[1]))
+  const maxLat = Math.max(...effectivePoints.map(p => p[1]))
+
+  const bounds: [[number, number], [number, number]] = [
+    [minLng, minLat],
+    [maxLng, maxLat]
+  ]
   map.fitBounds(bounds, { padding: pad, maxZoom: 14.5, duration: 1200, essential: true })
 }
 
@@ -1087,9 +1192,9 @@ watch(() => props.userLocation, () => {
   }
 })
 
-// Watch selection, waypoints, trailhead, and inspectedRoute to refresh the GeoJSON map layers.
+// Watch selection, waypoints, trailhead, inspectedRoute, and selectedLegIndex to refresh the GeoJSON map layers.
 // Camera framing on selection is owned by the parent via `focusOn` (it knows the peek card's size).
-watch([() => props.selectedId, () => props.waypoints, () => props.trailhead, () => props.inspectedRoute], () => {
+watch([() => props.selectedId, () => props.waypoints, () => props.trailhead, () => props.inspectedRoute, () => props.selectedLegIndex], () => {
   updateMapLayersData()
 })
 </script>

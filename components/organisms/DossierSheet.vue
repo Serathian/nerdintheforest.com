@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useTrailheadNav } from '~/composables/useTrailheadNav'
 
 interface Amenity {
   icon: string
@@ -37,20 +38,18 @@ const emit = defineEmits<{
   (e: 'read-story', note: FieldNote): void
 }>()
 
+const { openTrailheadModal } = useTrailheadNav()
 const lat = computed(() => props.note?.latitude ?? 60.25)
 const lng = computed(() => props.note?.longitude ?? 10.7167)
 
 function handleNavigateTrailhead() {
   if (!props.note?.trailhead) return
-  const destLat = props.note.trailhead.latitude
-  const destLng = props.note.trailhead.longitude
-  if (typeof window !== 'undefined') {
-    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-    const url = isApple
-      ? `maps://maps.apple.com/?daddr=${destLat},${destLng}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`
-    window.open(url, '_blank')
-  }
+  openTrailheadModal({
+    trailheadName: props.note.trailhead.name || `${props.note.title} Trailhead`,
+    locationName: props.note.title,
+    lat: props.note.trailhead.latitude,
+    lng: props.note.trailhead.longitude
+  })
 }
 </script>
 

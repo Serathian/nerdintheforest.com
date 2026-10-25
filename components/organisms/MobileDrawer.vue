@@ -8,6 +8,7 @@ import MobileRecentLocationsCarousel from '../molecules/MobileRecentLocationsCar
 import MobileLocationPeek from '../molecules/MobileLocationPeek.vue'
 import MobileDispatchesTrack from '../molecules/MobileDispatchesTrack.vue'
 import MobileDispatchInspectionPeek from '../molecules/MobileDispatchInspectionPeek.vue'
+import { useTrailheadNav } from '~/composables/useTrailheadNav'
 
 interface Props {
   fieldNotes: FieldNote[]
@@ -17,6 +18,7 @@ interface Props {
   activeFilterCount?: number
   activeDispatch?: Dispatch | null
   inspectedWaypoints?: any[]
+  selectedLegIndex?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,11 +27,14 @@ const props = withDefaults(defineProps<Props>(), {
   activeCategory: 'ALL',
   activeFilterCount: 0,
   activeDispatch: null,
-  inspectedWaypoints: () => []
+  inspectedWaypoints: () => [],
+  selectedLegIndex: null
 })
 
 const emit = defineEmits<{
   (e: 'select-note', id: string): void
+  (e: 'select-leg', index: number): void
+  (e: 'clear-leg'): void
   (e: 'clear-selected'): void
   (e: 'read-story', target: any): void
   (e: 'navigate', payload: { id: string; lat: number; lng: number }): void
@@ -128,18 +133,19 @@ function handleReadSpecificDispatch(dispatch: LinkedDispatch) {
   emit('read-story', dispatch)
 }
 
+const { openTrailheadModal } = useTrailheadNav()
+
 function handleNavigate(note: FieldNote) {
   if (!note.trailhead) return
   const lat = note.trailhead.latitude ?? note.latitude ?? 60.2710
   const lng = note.trailhead.longitude ?? note.longitude ?? 10.7320
   emit('navigate', { id: note.id, lat, lng })
-  if (typeof window !== 'undefined') {
-    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-    const url = isApple
-      ? `maps://maps.apple.com/?daddr=${lat},${lng}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-    window.open(url, '_blank')
-  }
+  openTrailheadModal({
+    trailheadName: note.trailhead.name || `${note.title} Trailhead`,
+    locationName: note.title,
+    lat,
+    lng
+  })
 }
 </script>
 
@@ -155,7 +161,10 @@ function handleNavigate(note: FieldNote) {
           :dispatch="activeDispatch"
           :waypoints="inspectedWaypoints"
           :selected-location-id="selectedId"
+          :selected-leg-index="selectedLegIndex"
           @select-waypoint="(id) => emit('select-note', id)"
+          @select-leg="(idx) => emit('select-leg', idx)"
+          @clear-leg="emit('clear-leg')"
           @exit="emit('exit-inspection')"
           @read-dispatch="(slug) => emit('read-story', slug)"
         />

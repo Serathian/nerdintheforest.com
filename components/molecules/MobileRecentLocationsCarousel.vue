@@ -22,14 +22,19 @@ const emit = defineEmits<{
   <div class="recent-locations-container">
     <!-- Horizontal Snapping Card Carousel -->
     <div v-if="fieldNotes.length > 0" class="locations-carousel">
-      <RecentCard v-for="note in fieldNotes" :key="note.id" :id="note.id" :number-tag="note.numberTag"
-        :title="note.title" :area="note.area" :description="note.description" :visited-count="note.visitedCount"
-        :dispatch-count="note.visitedCount && note.visitedCount > 0 ? (note.dispatches?.length ?? note.visitedCount) : 0"
-        :amenities="note.amenities" :latitude="note.latitude" :longitude="note.longitude"
-        :has-trailhead="!!note.trailhead" :trailhead-lat="note.trailhead?.latitude"
-        :trailhead-lng="note.trailhead?.longitude" :active="note.id === selectedId"
-        @click="emit('select-location', note.id)" @view-location="emit('select-location', note.id)"
-        @read-story="(id) => emit('read-story', id)" @navigate="(p) => emit('navigate', p)" />
+      <RecentCard
+        v-for="note in fieldNotes"
+        :key="note.id"
+        :id="note.id"
+        :title="note.title"
+        :area="note.area"
+        :time-ago="note.timeAgo"
+        :date="note.date"
+        :visited-count="note.visitedCount"
+        :amenities="note.amenities"
+        :active="note.id === selectedId"
+        @click="emit('select-location', note.id)"
+      />
     </div>
 
     <!-- Empty state when active filters yield 0 matches -->
@@ -58,10 +63,20 @@ const emit = defineEmits<{
   align-items: stretch;
   gap: 12px;
   overflow-x: auto;
-  padding: 8px 16px 12px;
+  padding: 10px 0 12px;
+  scroll-padding-left: 16px;
+  scroll-padding-right: 16px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+}
+
+.locations-carousel > :first-child {
+  margin-left: 16px;
+}
+
+.locations-carousel > :last-child {
+  margin-right: 16px;
 }
 
 .locations-carousel::-webkit-scrollbar {

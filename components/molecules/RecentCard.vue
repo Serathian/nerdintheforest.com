@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 interface Amenity {
   icon: string
   label: string
@@ -6,114 +8,100 @@ interface Amenity {
 
 interface Props {
   id: string
-  numberTag: string
   title: string
   area?: string
-  description?: string
+  timeAgo?: string
+  date?: string
   visitedCount?: number
-  dispatchCount?: number
   amenities: Amenity[]
-  latitude?: number
-  longitude?: number
   active?: boolean
-  hasTrailhead?: boolean
-  trailheadLat?: number
-  trailheadLng?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   area: '',
-  description: '',
+  timeAgo: '',
+  date: '',
   visitedCount: 0,
-  dispatchCount: 0,
-  latitude: 60.2710,
-  longitude: 10.7320,
-  active: false,
-  hasTrailhead: false
+  active: false
 })
 
 const emit = defineEmits<{
   (e: 'click', id: string): void
-  (e: 'view-location', id: string): void
-  (e: 'read-story', id: string): void
-  (e: 'navigate', payload: { id: string; lat: number; lng: number }): void
 }>()
 
-function handleNavigate() {
-  if (!props.hasTrailhead) return
-  const destLat = props.trailheadLat ?? props.latitude
-  const destLng = props.trailheadLng ?? props.longitude
-  emit('navigate', { id: props.id, lat: destLat, lng: destLng })
-  // Open external maps navigation from current location to trailhead
-  if (typeof window !== 'undefined') {
-    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-    const url = isApple
-      ? `maps://maps.apple.com/?daddr=${destLat},${destLng}&dirflg=d`
-      : `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`
-    window.open(url, '_blank')
+const formattedUpdated = computed(() => {
+  const rawDate = (props.date || '').trim()
+  const rawTimeAgo = (props.timeAgo || '').trim()
+
+  if (rawDate && !rawDate.toUpperCase().includes('UNVISITED')) {
+    if (rawDate.includes('//')) {
+      return rawDate.split('//')[0].trim()
+    }
+    const parsed = new Date(rawDate)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+        .toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        .toUpperCase()
+    }
+    return rawDate.toUpperCase()
   }
-}
+
+  if (rawTimeAgo && rawTimeAgo.toLowerCase() !== 'unvisited') {
+    return rawTimeAgo.toUpperCase()
+  }
+
+  if (rawDate.includes('//')) {
+    return rawDate.split('//')[0].trim()
+  }
+
+  return 'RECENTLY ADDED'
+})
 </script>
 
 <template>
-  <div
-    :class="[
-      'recent-card',
-      active ? 'active' : ''
-    ]"
+  <article
+    :class="['recent-card', { active }]"
+    role="button"
+    tabindex="0"
     @click="emit('click', id)"
+    @keydown.enter.prevent="emit('click', id)"
+    @keydown.space.prevent="emit('click', id)"
   >
-    <!-- Card Top Header: Tag & Badges -->
-    <div class="card-top-row">
-      <div class="flex items-center gap-1.5 min-w-0">
-        <span class="card-tag font-mono shrink-0">
-          {{ numberTag }}
-        </span>
-        <span v-if="area" class="card-area-badge font-mono truncate" :title="area">
-          {{ area }}
-        </span>
-      </div>
+    <!-- Top Row: Area & Visited Count -->
+    <div class="card-meta-row font-mono">
+      <span v-if="area" class="card-area-badge" :title="area">
+        <span class="material-symbols-outlined area-icon">public</span>
+        <span class="area-text">{{ area }}</span>
+      </span>
 
-      <div class="badges-group">
-        <!-- Dispatches Count Badge -->
-        <span
-          v-if="dispatchCount > 0"
-          class="dispatch-badge font-mono"
-        >
-          <span class="material-symbols-outlined badge-icon">article</span>
-          {{ dispatchCount }} {{ dispatchCount === 1 ? 'DISPATCH' : 'DISPATCHES' }}
-        </span>
-        <span
-          v-else
-          class="dispatch-badge unvisited font-mono"
-        >
-          0 DISPATCHES
-        </span>
+      <span
+        v-if="visitedCount > 0"
+        class="visited-badge visited"
+      >
+        <span class="material-symbols-outlined check-icon">check_circle</span>
+        <span>VISITED {{ visitedCount }}x</span>
+      </span>
+      <span
+        v-else
+        class="visited-badge unvisited"
+      >
+        <span class="material-symbols-outlined check-icon">radio_button_unchecked</span>
+        <span>NOT VISITED</span>
+      </span>
+    </div>
 
-        <!-- Visited Status Badge -->
-        <span
-          v-if="visitedCount > 0"
-          class="visited-badge visited font-mono"
-        >
-          <span class="material-symbols-outlined check-icon">check_circle</span>
-          VISITED {{ visitedCount }}x
-        </span>
-        <span
-          v-else
-          class="visited-badge unvisited font-mono"
-        >
-          <span class="material-symbols-outlined check-icon">radio_button_unchecked</span>
-          NOT VISITED
-        </span>
+    <!-- Location Name & Last Updated -->
+    <div class="card-header-group">
+      <h3 class="card-title font-serif">
+        {{ title }}
+      </h3>
+      <div class="card-updated-row font-mono">
+        <span class="material-symbols-outlined updated-icon">schedule</span>
+        <span>UPDATED {{ formattedUpdated }}</span>
       </div>
     </div>
 
-    <!-- Title -->
-    <h3 class="card-title font-serif">
-      {{ title }}
-    </h3>
-
-    <!-- Information Widgets (Lean-to, Firewood, Lake Water, Toilet, etc.) -->
+    <!-- Amenities -->
     <div class="amenities-row">
       <template v-if="amenities && amenities.length > 0">
         <span
@@ -130,142 +118,110 @@ function handleNavigate() {
         <span>UNVERIFIED AMENITIES</span>
       </span>
     </div>
-
-    <!-- Action Buttons Row -->
-    <div class="card-actions-row">
-      <!-- View Location Button -->
-      <button
-        class="action-btn view-btn font-mono"
-        type="button"
-        @click.stop="emit('view-location', id)"
-      >
-        <span class="material-symbols-outlined btn-icon">explore</span>
-        <span>VIEW LOCATION</span>
-      </button>
-
-      <!-- Navigate to Trailhead Button (only shown when trailhead exists) -->
-      <button
-        v-if="hasTrailhead"
-        class="action-btn nav-btn font-mono"
-        type="button"
-        title="Directions to trailhead"
-        @click.stop="handleNavigate"
-      >
-        <span class="material-symbols-outlined btn-icon">directions</span>
-        <span>TRAILHEAD</span>
-      </button>
-    </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
 .recent-card {
-  width: 275px;
-  min-width: 275px;
-  max-width: 275px;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
   flex-shrink: 0;
   scroll-snap-align: start;
   user-select: none;
   border-radius: 8px;
   padding: 12px 14px;
-  background-color: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  box-shadow: var(--color-card-shadow);
+  background-color: var(--color-card-bg, #ffffff);
+  border: 1px solid var(--color-card-border, rgba(27, 46, 36, 0.16));
+  box-shadow: 0 2px 10px rgba(27, 46, 36, 0.07);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
+  box-sizing: border-box;
+}
+
+.recent-card:first-child {
+  margin-left: 16px;
+}
+
+.recent-card:last-child {
+  margin-right: 16px;
 }
 
 .recent-card:hover {
-  border-color: var(--color-secondary);
-  box-shadow: 0 6px 18px rgba(27, 46, 36, 0.12);
+  border-color: var(--color-secondary, #d9531e);
+  box-shadow: 0 6px 16px rgba(27, 46, 36, 0.12);
+  transform: translateY(-1px);
 }
 
 .recent-card.active {
-  border-color: var(--color-secondary);
-  box-shadow: 0 0 0 2px rgba(217, 83, 30, 0.35), 0 6px 18px rgba(27, 46, 36, 0.14);
-  background-color: #ffffff;
+  border-color: var(--color-secondary, #d9531e);
+  box-shadow: 0 0 0 1.5px rgba(217, 83, 30, 0.4), 0 6px 16px rgba(27, 46, 36, 0.14);
+  background-color: #fef9ed;
 }
 
-.card-top-row {
+/* TOP ROW: AREA & VISITED STATUS */
+.card-meta-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-}
-
-.card-tag {
-  font-size: 10px;
-  color: var(--color-secondary);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  gap: 8px;
 }
 
 .card-area-badge {
   display: inline-flex;
   align-items: center;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 8.5px;
+  gap: 3.5px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   background-color: rgba(217, 83, 30, 0.1);
-  color: var(--color-secondary);
+  color: var(--color-secondary, #d9531e);
   border: 1px solid rgba(217, 83, 30, 0.25);
+  min-width: 0;
+  max-width: 135px;
 }
 
-.badges-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.area-icon {
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
-.dispatch-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 5px;
-  border-radius: 4px;
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  background-color: rgba(231, 226, 214, 0.9);
-  color: var(--color-primary);
-  border: 1px solid rgba(115, 120, 116, 0.3);
-}
-
-.badge-icon {
-  font-size: 10px;
-  color: var(--color-secondary);
+.area-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .visited-badge {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 5px;
+  gap: 3.5px;
+  padding: 2px 6px;
   border-radius: 4px;
   font-size: 8.5px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .visited-badge.visited {
-  background-color: var(--color-primary-container);
+  background-color: var(--color-primary-container, #1b2e24);
   color: #ffffff;
   border: 1px solid rgba(27, 46, 36, 0.4);
 }
 
 .visited-badge.unvisited {
-  background-color: var(--color-surface-container);
-  color: var(--color-on-surface-variant);
+  background-color: var(--color-surface-container, #eedfc5);
+  color: var(--color-on-surface-variant, #424844);
   border: 1px solid rgba(194, 200, 194, 0.5);
 }
 
@@ -273,20 +229,51 @@ function handleNavigate() {
   font-size: 10px;
 }
 
+/* TITLE & UPDATED DATE */
+.card-header-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .card-title {
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1.25;
-  color: var(--color-primary);
+  color: var(--color-primary, #1b2e24);
   font-weight: 500;
   letter-spacing: -0.01em;
   margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* INFORMATION WIDGETS */
+.card-updated-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--color-lichen-slate, #526056);
+  text-transform: uppercase;
+}
+
+.updated-icon {
+  font-size: 11px;
+  color: var(--color-secondary, #d9531e);
+  opacity: 0.85;
+}
+
+/* AMENITIES */
 .amenities-row {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid rgba(115, 120, 116, 0.16);
 }
 
 .amenity-widget {
@@ -295,73 +282,17 @@ function handleNavigate() {
   gap: 4px;
   padding: 3px 6px;
   border-radius: 4px;
-  background-color: var(--color-surface-container);
-  border: 1px solid rgba(194, 200, 194, 0.5);
-  color: var(--color-primary);
-  font-size: 10px;
+  background-color: var(--color-surface-container-low, #f7f0e2);
+  border: 1px solid rgba(194, 200, 194, 0.55);
+  color: var(--color-primary, #1b2e24);
+  font-size: 9.5px;
   font-weight: 500;
   line-height: 1;
 }
 
 .widget-icon {
-  font-size: 12px;
-  color: var(--color-secondary);
-}
-
-/* ACTION BUTTONS */
-.card-actions-row {
-  padding-top: 8px;
-  border-top: 1px solid rgba(115, 120, 116, 0.2);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.action-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.view-btn {
-  background-color: var(--color-primary);
-  color: #ffffff;
-}
-
-.view-btn:hover {
-  background-color: var(--color-secondary);
-}
-
-.nav-btn {
-  background-color: var(--color-surface-container-high);
-  color: var(--color-primary);
-  border: 1px solid rgba(115, 120, 116, 0.35);
-}
-
-.nav-btn:hover {
-  background-color: var(--color-surface-container-highest);
-  border-color: var(--color-primary);
-}
-
-.nav-btn.disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-  background-color: var(--color-surface-container);
-  color: var(--color-lichen-slate);
-  border-color: rgba(115, 120, 116, 0.2);
+  font-size: 11.5px;
+  color: var(--color-secondary, #d9531e);
 }
 
 .amenities-unverified {
@@ -370,9 +301,9 @@ function handleNavigate() {
   gap: 4px;
   padding: 3px 6px;
   border-radius: 4px;
-  background-color: var(--color-surface-container-low);
+  background-color: var(--color-surface-container-low, #f7f0e2);
   border: 1px dashed rgba(115, 120, 116, 0.3);
-  color: var(--color-lichen-slate);
+  color: var(--color-lichen-slate, #526056);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -382,13 +313,5 @@ function handleNavigate() {
 .unverified-icon {
   font-size: 11px;
   opacity: 0.7;
-}
-
-.action-btn:active {
-  transform: scale(0.97);
-}
-
-.btn-icon {
-  font-size: 13px;
 }
 </style>

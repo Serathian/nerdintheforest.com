@@ -135,6 +135,17 @@ export function transformCmsLocation(doc: any): Location {
     ? (doc.area.slug || String(doc.area.id))
     : String(doc.area || '')
 
+  const docSlug = doc.slug || String(doc.id)
+  const matchedMockNote = mockFieldNotes.find(
+    n => n.slug === docSlug || n.id === docSlug || n.id === String(doc.id)
+  )
+  const resolvedTrailGeometry: Array<[number, number]> | undefined =
+    doc.trail_geometry ||
+    doc.trailGeometry ||
+    doc.trailhead?.trail_geometry ||
+    doc.trailhead?.trailGeometry ||
+    matchedMockNote?.trailhead?.trailGeometry
+
   let trailheadLoc: Location | undefined = undefined
   if (doc.trailhead && typeof doc.trailhead === 'object') {
     trailheadLoc = {
@@ -148,7 +159,23 @@ export function transformCmsLocation(doc: any): Location {
       summary: doc.trailhead.summary || 'Trailhead access point',
       amenities: [],
       elevationGain: doc.elevation_gain ?? doc.trailhead.elevation_gain,
-      elevationLoss: doc.elevation_loss ?? doc.trailhead.elevation_loss
+      elevationLoss: doc.elevation_loss ?? doc.trailhead.elevation_loss,
+      trailGeometry: resolvedTrailGeometry
+    }
+  } else if (!doc.trailhead && matchedMockNote?.trailhead) {
+    trailheadLoc = {
+      id: `th-${docSlug}`,
+      slug: `${docSlug}-trailhead`,
+      name: matchedMockNote.trailhead.name,
+      area: areaId,
+      category: 'trailhead',
+      latitude: matchedMockNote.trailhead.latitude,
+      longitude: matchedMockNote.trailhead.longitude,
+      summary: `Trailhead parking for ${doc.name || matchedMockNote.title}`,
+      amenities: [],
+      elevationGain: doc.elevation_gain ?? matchedMockNote.trailhead.elevationGain,
+      elevationLoss: doc.elevation_loss ?? matchedMockNote.trailhead.elevationLoss,
+      trailGeometry: resolvedTrailGeometry
     }
   }
 
@@ -168,6 +195,7 @@ export function transformCmsLocation(doc: any): Location {
     summary: doc.summary || '',
     amenities: Array.isArray(doc.amenities) ? doc.amenities : [],
     trailhead: trailheadLoc || (doc.trailhead ? String(doc.trailhead) : undefined),
+    trailGeometry: resolvedTrailGeometry,
     elevationGain: doc.elevation_gain != null ? Number(doc.elevation_gain) : undefined,
     elevationLoss: doc.elevation_loss != null ? Number(doc.elevation_loss) : undefined,
     coverImage: coverImageUrl ? {
@@ -287,7 +315,9 @@ export function transformLocationToFieldNote(
     areaId,
     area: areaName || 'Wilderness Area',
     description: loc.summary || 'Tactile backcountry survey note from the Nordic field.',
-    timeAgo: latestDispatch ? 'Recent' : 'Unvisited',
+    timeAgo: latestDispatch?.publishedAt
+      ? new Date(latestDispatch.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Unvisited',
     visitedCount: visitCount,
     amenities: amenitiesList,
     footerFeature: loc.trailhead ? 'Trailhead linked' : 'Wilderness location',

@@ -23,6 +23,7 @@ const isReaderOpen = ref(false)
 const router = useRouter()
 const route = useRoute()
 const activeDispatchInspection = useState<any>('activeDispatchInspection', () => null)
+const selectedLegIndex = ref<number | null>(null)
 const isFilterOpen = ref(false)
 const searchQuery = ref('')
 const activeCategory = ref('ALL')
@@ -46,8 +47,13 @@ const activeDispatchSlug = computed(() => {
 })
 
 const asyncFetchedDispatch = ref<any>(null)
+let focusRequestId = 0
 
-watch(activeDispatchSlug, async (slug) => {
+watch(activeDispatchSlug, async (slug, oldSlug) => {
+  if (slug !== oldSlug) {
+    selectedLegIndex.value = null
+    selectedNoteId.value = ''
+  }
   if (!slug) {
     asyncFetchedDispatch.value = null
     return
@@ -215,23 +221,102 @@ const inspectedRoute = computed(() => {
 async function focusInspectedRoute() {
   if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return
 
+  const reqId = ++focusRequestId
+
   await nextTick()
   if (typeof window !== 'undefined') {
     await new Promise(resolve => requestAnimationFrame(resolve))
   }
 
+  if (reqId !== focusRequestId) return
+  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return
+  if (selectedLegIndex.value !== null || selectedNoteId.value) return
+
   const points: Array<[number, number]> = inspectedWaypoints.value
     .filter(w => w.longitude != null && w.latitude != null)
     .map(w => [w.longitude!, w.latitude!])
 
+  if (inspectedRoute.value?.geometry?.length) {
+    points.push(...inspectedRoute.value.geometry)
+  }
+
   if (points.length > 0) {
     if (!mapRef.value) {
       setTimeout(() => {
-        mapRef.value?.focusOn(points, getMapFocusPadding())
+        if (reqId === focusRequestId && selectedLegIndex.value === null && !selectedNoteId.value) {
+          mapRef.value?.focusOn(points, getMapFocusPadding())
+        }
       }, 120)
       return
     }
     mapRef.value?.focusOn(points, getMapFocusPadding())
+  }
+}
+
+async function focusLeg(index: number) {
+  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length < 2) return
+  if (index < 0 || index >= inspectedWaypoints.value.length - 1) return
+
+  selectedLegIndex.value = index
+  selectedNoteId.value = ''
+  const reqId = ++focusRequestId
+
+  await nextTick()
+  if (typeof window !== 'undefined') {
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+
+  if (reqId !== focusRequestId || selectedLegIndex.value !== index) return
+
+  const from = inspectedWaypoints.value[index]
+  const to = inspectedWaypoints.value[index + 1]
+  if (from && to && from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
+    const points: Array<[number, number]> = [
+      [from.longitude, from.latitude],
+      [to.longitude, to.latitude]
+    ]
+    if (!mapRef.value) {
+      setTimeout(() => {
+        if (reqId === focusRequestId && selectedLegIndex.value === index) {
+          mapRef.value?.focusOn(points, getMapFocusPadding())
+        }
+      }, 120)
+      return
+    }
+    mapRef.value?.focusOn(points, getMapFocusPadding())
+  }
+}
+
+function handleClearLeg() {
+  selectedLegIndex.value = null
+  focusInspectedRoute()
+}
+
+function handleSelectLeg(index: number) {
+  if (selectedLegIndex.value === index) {
+    handleClearLeg()
+  } else {
+    focusLeg(index)
+  }
+}
+
+function handleMapClick() {
+  if (selectedLegIndex.value !== null) {
+    handleClearLeg()
+  } else if (activeInspectedDispatch.value && selectedNoteId.value) {
+    selectedNoteId.value = ''
+  }
+}
+
+function handleMapReady() {
+  if (activeInspectedDispatch.value && inspectedWaypoints.value.length > 0) {
+    if (selectedLegIndex.value !== null) {
+      focusLeg(selectedLegIndex.value)
+    } else if (selectedNoteId.value) {
+      focusSelection()
+    } else {
+      focusInspectedRoute()
+    }
   }
 }
 
@@ -243,17 +328,19 @@ watch([activeInspectedDispatch, inspectedWaypoints], ([d, wps]) => {
       title: d.title,
       locationsCount: d.locations?.length || 0
     }
-    if (wps.length > 0 && !selectedNoteId.value) {
+    if (wps.length > 0 && !selectedNoteId.value && selectedLegIndex.value === null) {
       focusInspectedRoute()
     }
   } else if (!route.query.dispatch && !route.query.story) {
     activeDispatchInspection.value = null
+    selectedLegIndex.value = null
   }
 }, { immediate: true, flush: 'post' })
 
 function handleExitInspection() {
   activeDispatchInspection.value = null
   selectedNoteId.value = ''
+  selectedLegIndex.value = null
   const query = { ...route.query }
   delete query.dispatch
   delete query.story
@@ -265,7 +352,9 @@ function handleExitInspection() {
 
 function handleWindowResize() {
   if (activeInspectedDispatch.value) {
-    if (selectedNoteId.value) {
+    if (selectedLegIndex.value !== null) {
+      focusLeg(selectedLegIndex.value)
+    } else if (selectedNoteId.value) {
       focusSelection()
     } else {
       focusInspectedRoute()
@@ -339,14 +428,18 @@ function fitAllWaypoints() {
 }
 
 function initDefaultPosition() {
-  // Check URL query param for direct story or location link sharing
+  // Check URL query param or active dispatch inspection state for direct story or location link sharing
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search)
-    const storyParam = params.get('story') || params.get('dispatch')
+    const storyParam = params.get('story') || params.get('dispatch') || activeDispatchSlug.value
     if (storyParam) {
       isReaderOpen.value = false
       showNotification('Dispatch route inspection active')
-      focusInspectedRoute()
+      if (selectedLegIndex.value !== null) {
+        focusLeg(selectedLegIndex.value)
+      } else {
+        focusInspectedRoute()
+      }
       return
     }
 
@@ -508,12 +601,12 @@ const filteredWaypoints = computed(() => {
 
 // Selected Note Details
 const selectedNote = computed(() => {
-  return fieldNotes.value.find(n => n.id === selectedNoteId.value) || fieldNotes.value[0] || null
+  return fieldNotes.value.find(n => n.id === selectedNoteId.value || n.slug === selectedNoteId.value) || fieldNotes.value[0] || null
 })
 
 // Trailhead (parking) for the explicitly selected location — not the fallback note above
 const selectedTrailhead = computed(() => {
-  const note = fieldNotes.value.find(n => n.id === selectedNoteId.value)
+  const note = fieldNotes.value.find(n => n.id === selectedNoteId.value || n.slug === selectedNoteId.value)
   if (!note?.trailhead) return null
   return {
     name: note.trailhead.name,
@@ -534,7 +627,10 @@ const drawerRef = ref<any>(null)
  * in the visible viewport above the mobile drawer.
  */
 function getMapFocusPadding() {
-  const defaultPadding = { top: 76, bottom: 48, left: 48, right: 72 }
+  const isInspecting = !!activeInspectedDispatch.value
+  const leftPadding = isInspecting ? 56 : 48
+  const rightPadding = isInspecting ? 56 : 72
+  const defaultPadding = { top: 76, bottom: 48, left: leftPadding, right: rightPadding }
   const viewport = viewportRef.value
   if (!viewport || typeof window === 'undefined') return defaultPadding
 
@@ -546,8 +642,8 @@ function getMapFocusPadding() {
     viewportBottom,
     drawerTop,
     topClearance: 76,
-    leftPadding: 48,
-    rightPadding: 72
+    leftPadding,
+    rightPadding
   })
 }
 
@@ -566,6 +662,8 @@ async function focusSelection() {
   }
   if (!note || note.longitude == null || note.latitude == null) return
 
+  const reqId = ++focusRequestId
+
   // Await Vue DOM patch and requestAnimationFrame layout resolution
   // so the newly rendered peek card and drawer height are accurately measured
   await nextTick()
@@ -573,16 +671,15 @@ async function focusSelection() {
     await new Promise(resolve => requestAnimationFrame(resolve))
   }
 
+  if (reqId !== focusRequestId) return
+
   const points: Array<[number, number]> = [[note.longitude, note.latitude]]
   const th = note.trailhead
   if (th && th.latitude != null && th.longitude != null) {
     points.push([th.longitude, th.latitude])
     const geom = (th as any).trailGeometry
-    if (geom && geom.length > 2) {
-      const step = Math.max(1, Math.floor(geom.length / 5))
-      for (let i = step; i < geom.length; i += step) {
-        points.push(geom[i])
-      }
+    if (Array.isArray(geom) && geom.length > 0) {
+      points.push(...geom)
     }
   }
   mapRef.value?.focusOn(points, getMapFocusPadding())
@@ -592,12 +689,13 @@ async function focusSelection() {
 watch(selectedNoteId, (id) => {
   if (id) {
     focusSelection()
-  } else if (activeInspectedDispatch.value) {
+  } else if (activeInspectedDispatch.value && selectedLegIndex.value === null) {
     focusInspectedRoute()
   }
 }, { flush: 'post' })
 
 function handleSelectNote(id: string) {
+  selectedLegIndex.value = null
   if (selectedNoteId.value === id) {
     // Same location re-tapped: the watcher won't fire, so re-frame explicitly
     focusSelection()
@@ -748,8 +846,9 @@ function showNotification(msg: string) {
       <ClientOnly>
         <MapCanvas ref="mapRef" :waypoints="filteredWaypoints" :selected-id="selectedNoteId"
           :trailhead="selectedTrailhead" :active-layer="activeLayer" :user-location="userLocation"
-          :inspected-route="inspectedRoute"
-          @select-waypoint="handleSelectNote" />
+          :inspected-route="inspectedRoute" :selected-leg-index="selectedLegIndex"
+          @select-waypoint="handleSelectNote" @select-leg="handleSelectLeg" @map-click="handleMapClick"
+          @ready="handleMapReady" />
       </ClientOnly>
 
       <!-- Map Controls (Zoom, Current Location, Layer Toggle) -->
@@ -769,10 +868,11 @@ function showNotification(msg: string) {
     <MobileDrawer ref="drawerRef" :field-notes="filteredFieldNotes" :selected-id="selectedNoteId"
       :search-query="searchQuery" :active-category="activeCategory" :active-filter-count="activeFilterCount"
       :active-dispatch="activeInspectedDispatch" :inspected-waypoints="inspectedWaypoints"
-      @select-note="handleSelectNote" @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
+      :selected-leg-index="selectedLegIndex"
+      @select-note="handleSelectNote" @select-leg="handleSelectLeg" @clear-leg="handleClearLeg"
+      @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
         selectedNoteId = p.id
         focusSelection()
-        showNotification('Opening maps to trailhead...')
       }" @open-filters="handleOpenFilters" @update:search-query="(q) => searchQuery = q"
       @select-category="handleSelectCategory" @exit-inspection="handleExitInspection" />
 
