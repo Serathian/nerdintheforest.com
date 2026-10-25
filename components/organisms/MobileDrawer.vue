@@ -58,13 +58,13 @@ const selectedLocation = computed(() => {
   return props.fieldNotes.find(n => n.id === props.selectedId) || null
 })
 
-// Elevation gain and loss for selected location route
+// Elevation gain and loss for selected location route (only when trailhead is a separate hike away)
 const elevationGainLoss = computed(() => {
   if (!selectedLocation.value) return null
   const th = selectedLocation.value.trailhead
   const gain = th?.elevationGain ?? selectedLocation.value.elevationGain
   const loss = th?.elevationLoss ?? selectedLocation.value.elevationLoss
-  if (gain != null && loss != null) {
+  if (gain != null && loss != null && (gain > 0 || loss > 0)) {
     return { up: gain, down: loss }
   }
   return null
@@ -136,12 +136,12 @@ function handleReadSpecificDispatch(dispatch: LinkedDispatch) {
 const { openTrailheadModal } = useTrailheadNav()
 
 function handleNavigate(note: FieldNote) {
-  if (!note.trailhead) return
-  const lat = note.trailhead.latitude ?? note.latitude ?? 60.2710
-  const lng = note.trailhead.longitude ?? note.longitude ?? 10.7320
+  if (!note.trailhead && !note.hasParking) return
+  const lat = note.trailhead?.latitude ?? note.latitude ?? 60.2710
+  const lng = note.trailhead?.longitude ?? note.longitude ?? 10.7320
   emit('navigate', { id: note.id, lat, lng })
   openTrailheadModal({
-    trailheadName: note.trailhead.name || `${note.title} Trailhead`,
+    trailheadName: note.trailhead?.name || `${note.title} Parking`,
     locationName: note.title,
     lat,
     lng

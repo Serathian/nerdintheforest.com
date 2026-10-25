@@ -47,10 +47,11 @@ export interface MockFieldNote {
   elevation: number
   shelterCapacity?: number
   tentSpaces?: number
+  hasParking?: boolean
   elevationGain?: number
   elevationLoss?: number
   distanceKm: number
-  category: 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'SUMMIT' | 'VIEWPOINT'
+  category: 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'SUMMIT' | 'VIEWPOINT' | 'TRAILHEAD'
   slug: string
   date: string
   readTime: string
@@ -860,7 +861,7 @@ export const mockFieldNotes: MockFieldNote[] = [
     longitude: 23.8920,
     elevation: 125,
     distanceKm: 0.0,
-    category: 'SHELTER',
+    category: 'TRAILHEAD',
     content: ['Pysäköintialue Savontien varrella Lempäälässä. Päälähtöpiste Birgitan polulle kohti Vähä-Riutan ja Vähä-Kauas laavuja.'],
     gallery: [],
     dispatches: [
@@ -945,7 +946,7 @@ export const mockFieldNotes: MockFieldNote[] = [
     longitude: 23.8320,
     elevation: 180,
     distanceKm: 0.0,
-    category: 'SHELTER',
+    category: 'TRAILHEAD',
     content: ['Pääportti ja taukokeskus Helvetinjärven kansallispuistoon Ruovedellä.'],
     gallery: [],
     dispatches: [
@@ -1047,16 +1048,18 @@ export const mockFieldNotes: MockFieldNote[] = [
   }
 ]
 
-export const mockMapWaypoints: MockMapWaypoint[] = mockFieldNotes.map(note => ({
-  id: note.id,
-  title: note.title,
-  lat: note.latitude,
-  lng: note.longitude,
-  type: note.category.toLowerCase(),
-  areaId: note.areaId,
-  area: note.area,
-  region: note.area
-}))
+export const mockMapWaypoints: MockMapWaypoint[] = mockFieldNotes
+  .filter(note => note.category.toUpperCase() !== 'TRAILHEAD')
+  .map(note => ({
+    id: note.id,
+    title: note.title,
+    lat: note.latitude,
+    lng: note.longitude,
+    type: note.category.toLowerCase(),
+    areaId: note.areaId,
+    area: note.area,
+    region: note.area
+  }))
 
 // =============================================================================
 // NORMALIZED DISPATCHES (nitf_dispatches)
@@ -1336,9 +1339,11 @@ export const mockLocations: Location[] = mockFieldNotes.map(note => {
     else if (l.includes('wood')) amenityList.push('dry_wood')
     else if (l.includes('view') || l.includes('vista')) amenityList.push('lake_view')
     else if (l.includes('water')) amenityList.push('lake_water')
+    else if (l.includes('tent') || l.includes('pitch')) amenityList.push('tent_pitch')
+    else if (l.includes('parking') || l.includes('trailhead')) amenityList.push('parking')
   })
 
-  // Trailhead self-referencing Location
+  // Trailhead self-referencing Location (or the location itself if it has parking)
   let trailheadLoc: Location | undefined
   if (note.trailhead) {
     trailheadLoc = {
@@ -1350,10 +1355,26 @@ export const mockLocations: Location[] = mockFieldNotes.map(note => {
       latitude: note.trailhead.latitude,
       longitude: note.trailhead.longitude,
       summary: `Trailhead parking for ${note.title}`,
-      amenities: [],
+      amenities: ['parking'],
+      hasParking: true,
       elevationGain: note.trailhead.elevationGain,
       elevationLoss: note.trailhead.elevationLoss,
       trailGeometry: note.trailhead.trailGeometry
+    }
+  } else if (amenityList.includes('parking') || note.hasParking) {
+    trailheadLoc = {
+      id: note.id,
+      slug: note.slug,
+      name: note.title,
+      area: note.areaId,
+      category: note.category.toLowerCase() as LocationCategory,
+      latitude: note.latitude,
+      longitude: note.longitude,
+      summary: note.description,
+      amenities: amenityList,
+      hasParking: true,
+      elevationGain: 0,
+      elevationLoss: 0
     }
   }
 
@@ -1373,6 +1394,7 @@ export const mockLocations: Location[] = mockFieldNotes.map(note => {
     elevation: note.elevation,
     shelterCapacity: defaultShelterCapacity,
     tentSpaces: defaultTentSpaces,
+    hasParking: amenityList.includes('parking') || Boolean(note.hasParking),
     summary: note.description,
     amenities: amenityList,
     trailhead: trailheadLoc,

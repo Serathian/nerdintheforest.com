@@ -145,7 +145,8 @@ const AMENITY_MAP: Record<LocationAmenity, { label: string; icon: string }> = {
   dry_wood: { label: 'Dry Wood', icon: 'forest' },
   lake_view: { label: 'Lake View', icon: 'visibility' },
   lake_water: { label: 'Lake Water', icon: 'water_drop' },
-  tent_pitch: { label: 'Tent Pitch', icon: 'camping' }
+  tent_pitch: { label: 'Tent Pitch', icon: 'camping' },
+  parking: { label: 'Parking / Trailhead', icon: 'directions_car' }
 }
 
 export function getAmenityMeta(amenity: LocationAmenity): { label: string; icon: string } {

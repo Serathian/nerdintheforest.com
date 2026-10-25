@@ -89,15 +89,17 @@ function copyShareUrl() {
 }
 
 function handleNavigateTrailhead() {
-  const th = currentLocation.value?.trailhead
-  if (!th) return
-  const lat = typeof th === 'object' ? th.latitude : null
-  const lng = typeof th === 'object' ? th.longitude : null
+  const loc = currentLocation.value
+  if (!loc) return
+  const th = loc.trailhead
+  const hasOwnParking = Boolean(loc.hasParking || loc.amenities?.includes('parking'))
+  const lat = th && typeof th === 'object' ? th.latitude : (hasOwnParking ? loc.latitude : null)
+  const lng = th && typeof th === 'object' ? th.longitude : (hasOwnParking ? loc.longitude : null)
   if (lat == null || lng == null) return
 
   openTrailheadModal({
-    trailheadName: (typeof th === 'object' && th.name) ? th.name : `${currentLocation.value?.name || 'Waypoint'} Trailhead`,
-    locationName: currentLocation.value?.name,
+    trailheadName: (th && typeof th === 'object' && th.name) ? th.name : `${loc.name || 'Waypoint'} Parking`,
+    locationName: loc.name,
     lat,
     lng
   })
@@ -242,7 +244,7 @@ useHead({
               <span>VIEW ON ATLAS MAP</span>
             </button>
 
-            <button v-if="currentLocation.trailhead" class="secondary-action-btn font-mono" type="button"
+            <button v-if="currentLocation.trailhead || currentLocation.hasParking || currentLocation.amenities?.includes('parking')" class="secondary-action-btn font-mono" type="button"
               @click="handleNavigateTrailhead">
               <span class="material-symbols-outlined text-[16px]">directions</span>
               <span>NAVIGATE TO TRAILHEAD</span>

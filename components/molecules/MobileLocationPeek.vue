@@ -86,10 +86,10 @@ const emit = defineEmits<{
       :destination-name="location.title"
     />
 
-    <!-- Action Buttons Row (only shown if location has a trailhead) -->
+    <!-- Action Buttons Row (only shown if location has a trailhead or on-site parking) -->
     <div class="peek-actions-row">
       <button
-        v-if="location.trailhead"
+        v-if="location.trailhead || location.hasParking"
         class="action-btn trailhead-btn font-mono"
         type="button"
         title="Directions from current location"

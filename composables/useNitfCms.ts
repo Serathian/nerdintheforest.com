@@ -146,6 +146,10 @@ export function transformCmsLocation(doc: any): Location {
     doc.trailhead?.trailGeometry ||
     matchedMockNote?.trailhead?.trailGeometry
 
+  const cat = (doc.category || 'shelter') as LocationCategory
+  const amenitiesArr: LocationAmenity[] = Array.isArray(doc.amenities) ? doc.amenities : []
+  const hasParking = amenitiesArr.includes('parking') || Boolean(doc.has_parking || doc.hasParking || matchedMockNote?.hasParking)
+
   let trailheadLoc: Location | undefined = undefined
   if (doc.trailhead && typeof doc.trailhead === 'object') {
     trailheadLoc = {
@@ -157,7 +161,8 @@ export function transformCmsLocation(doc: any): Location {
       latitude: Number(doc.trailhead.latitude),
       longitude: Number(doc.trailhead.longitude),
       summary: doc.trailhead.summary || 'Trailhead access point',
-      amenities: [],
+      amenities: ['parking'],
+      hasParking: true,
       elevationGain: doc.elevation_gain ?? doc.trailhead.elevation_gain,
       elevationLoss: doc.elevation_loss ?? doc.trailhead.elevation_loss,
       trailGeometry: resolvedTrailGeometry
@@ -172,10 +177,27 @@ export function transformCmsLocation(doc: any): Location {
       latitude: matchedMockNote.trailhead.latitude,
       longitude: matchedMockNote.trailhead.longitude,
       summary: `Trailhead parking for ${doc.name || matchedMockNote.title}`,
-      amenities: [],
+      amenities: ['parking'],
+      hasParking: true,
       elevationGain: doc.elevation_gain ?? matchedMockNote.trailhead.elevationGain,
       elevationLoss: doc.elevation_loss ?? matchedMockNote.trailhead.elevationLoss,
       trailGeometry: resolvedTrailGeometry
+    }
+  } else if (!doc.trailhead && hasParking && cat !== 'trailhead') {
+    // Location has parking amenity, so it acts as its own trailhead
+    trailheadLoc = {
+      id: doc.slug || String(doc.id),
+      slug: doc.slug || String(doc.id),
+      name: doc.name || 'Trailhead Parking',
+      area: areaId,
+      category: cat,
+      latitude: Number(doc.latitude),
+      longitude: Number(doc.longitude),
+      summary: doc.summary || 'On-site parking / trailhead',
+      amenities: amenitiesArr,
+      hasParking: true,
+      elevationGain: 0,
+      elevationLoss: 0
     }
   }
 
@@ -183,8 +205,6 @@ export function transformCmsLocation(doc: any): Location {
     ? doc.cover_image.url
     : undefined
 
-  const cat = (doc.category || 'shelter') as LocationCategory
-  const amenitiesArr: LocationAmenity[] = Array.isArray(doc.amenities) ? doc.amenities : []
   const hasShelter = amenitiesArr.includes('timber_shelter') || cat === 'shelter'
   const defaultShelterCap = hasShelter ? 4 : 0
   const defaultTentSpaces = cat === 'shelter' ? 3 : cat === 'hearth' ? 2 : cat === 'trailhead' ? 0 : 1
@@ -210,6 +230,7 @@ export function transformCmsLocation(doc: any): Location {
         : doc.tentSpaces != null
           ? Number(doc.tentSpaces)
           : (matchedMockNote?.tentSpaces ?? defaultTentSpaces),
+    hasParking,
     summary: doc.summary || '',
     amenities: amenitiesArr,
     trailhead: trailheadLoc || (doc.trailhead ? String(doc.trailhead) : undefined),
@@ -346,6 +367,7 @@ export function transformLocationToFieldNote(
     elevation: loc.elevation || 0,
     shelterCapacity: loc.shelterCapacity,
     tentSpaces: loc.tentSpaces,
+    hasParking: Boolean(loc.hasParking || loc.amenities?.includes('parking')),
     elevationGain: loc.elevationGain,
     elevationLoss: loc.elevationLoss,
     distanceKm: 1.5,
@@ -375,6 +397,12 @@ export function transformLocationToFieldNote(
       elevationGain: loc.elevationGain,
       elevationLoss: loc.elevationLoss,
       trailGeometry: loc.trailGeometry
+    } : (loc.hasParking || loc.amenities?.includes('parking')) ? {
+      name: loc.name,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      elevationGain: 0,
+      elevationLoss: 0
     } : undefined
   }
 }
@@ -403,9 +431,13 @@ async function fetchFromCms<T>(endpoint: string, base: string = '/api/cms'): Pro
 }
 
 export function useNitfCms() {
-  const fieldNotes = ref<TransformedFieldNote[]>([...mockFieldNotes])
+  const fieldNotes = ref<TransformedFieldNote[]>(
+    mockFieldNotes.filter(n => n.category.toUpperCase() !== 'TRAILHEAD')
+  )
   const mapWaypoints = ref<TransformedMapWaypoint[]>([...mockMapWaypoints])
-  const locations = ref<Location[]>([...mockLocations])
+  const locations = ref<Location[]>(
+    mockLocations.filter(l => (l.category || '').toLowerCase() !== 'trailhead')
+  )
   const dispatches = ref<Dispatch[]>([...mockDispatches])
   const areas = ref<Area[]>([...mockAreas])
   const isLoading = ref(false)
@@ -428,8 +460,8 @@ export function useNitfCms() {
       if (a.slug) areaNameMap.set(a.slug, a.name)
     })
 
-    // Exclude stand-alone trailhead entries from the field note cards (they are linked in destination locations)
-    const cardLocations = locations.value.filter(l => l.category !== 'trailhead')
+    // Exclude stand-alone trailhead entries from both field note cards and map waypoints
+    const cardLocations = locations.value.filter(l => (l.category || '').toLowerCase() !== 'trailhead')
 
     fieldNotes.value = cardLocations.map((loc, idx) => {
       const areaKey = (typeof loc.area === 'object' && loc.area !== null
@@ -439,7 +471,7 @@ export function useNitfCms() {
       return transformLocationToFieldNote(loc, areaName, idx, dispatches.value)
     })
 
-    mapWaypoints.value = locations.value.map(loc => {
+    mapWaypoints.value = cardLocations.map(loc => {
       const areaKey = (typeof loc.area === 'object' && loc.area !== null
         ? (loc.area.id || loc.area.slug)
         : String(loc.area || '')) || 'nordic'

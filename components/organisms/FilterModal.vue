@@ -79,7 +79,8 @@ const availableAmenities = [
   { id: 'Water', label: 'Potable Water', icon: 'water_drop' },
   { id: 'Hearth', label: 'Granite Hearth', icon: 'outdoor_grill' },
   { id: 'Shelter', label: 'Timber Shelter', icon: 'cabin' },
-  { id: 'Wood', label: 'Dry Firewood', icon: 'forest' }
+  { id: 'Wood', label: 'Dry Firewood', icon: 'forest' },
+  { id: 'Parking', label: 'Parking / Trailhead', icon: 'directions_car' }
 ]
 
 const hasActiveFilters = computed(() => {

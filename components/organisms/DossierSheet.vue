@@ -23,6 +23,7 @@ interface FieldNote {
   latitude?: number
   longitude?: number
   elevation?: number
+  hasParking?: boolean
   trailhead?: { name: string; latitude: number; longitude: number }
 }
 
@@ -43,12 +44,14 @@ const lat = computed(() => props.note?.latitude ?? 60.25)
 const lng = computed(() => props.note?.longitude ?? 10.7167)
 
 function handleNavigateTrailhead() {
-  if (!props.note?.trailhead) return
+  if (!props.note?.trailhead && !props.note?.hasParking) return
+  const targetLat = props.note.trailhead?.latitude ?? lat.value
+  const targetLng = props.note.trailhead?.longitude ?? lng.value
   openTrailheadModal({
-    trailheadName: props.note.trailhead.name || `${props.note.title} Trailhead`,
+    trailheadName: props.note.trailhead?.name || `${props.note.title} Parking`,
     locationName: props.note.title,
-    lat: props.note.trailhead.latitude,
-    lng: props.note.trailhead.longitude
+    lat: targetLat,
+    lng: targetLng
   })
 }
 </script>
@@ -188,7 +191,7 @@ function handleNavigateTrailhead() {
           </button>
 
           <button
-            v-if="note.trailhead"
+            v-if="note.trailhead || note.hasParking"
             class="flex-1 h-11 rounded bg-surface-container-highest hover:bg-surface-container border border-outline/35 text-primary font-mono text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm active:scale-98 transition-all"
             type="button"
             title="Directions to trailhead"

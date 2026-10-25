@@ -593,10 +593,12 @@ const filteredFieldNotes = computed(() => {
   })
 })
 
-// Filtered Waypoints matching filtered notes
+// Filtered Waypoints matching filtered notes (never render standalone trailheads as map waypoints)
 const filteredWaypoints = computed(() => {
   const matchingIds = new Set(filteredFieldNotes.value.map(n => n.id))
-  return mapWaypoints.value.filter(wp => matchingIds.has(wp.id))
+  return mapWaypoints.value.filter(
+    wp => matchingIds.has(wp.id) && (wp.type || '').toLowerCase() !== 'trailhead'
+  )
 })
 
 // Selected Note Details
@@ -604,10 +606,18 @@ const selectedNote = computed(() => {
   return fieldNotes.value.find(n => n.id === selectedNoteId.value || n.slug === selectedNoteId.value) || fieldNotes.value[0] || null
 })
 
-// Trailhead (parking) for the explicitly selected location — not the fallback note above
+// Trailhead (parking) for the explicitly selected location — only when it is a separate point from the location
 const selectedTrailhead = computed(() => {
   const note = fieldNotes.value.find(n => n.id === selectedNoteId.value || n.slug === selectedNoteId.value)
   if (!note?.trailhead) return null
+  if (
+    note.latitude != null &&
+    note.longitude != null &&
+    Math.abs(note.trailhead.latitude - note.latitude) < 1e-5 &&
+    Math.abs(note.trailhead.longitude - note.longitude) < 1e-5
+  ) {
+    return null
+  }
   return {
     name: note.trailhead.name,
     lat: note.trailhead.latitude,

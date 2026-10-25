@@ -63,6 +63,7 @@ export type LocationAmenity =
   | 'lake_view'
   | 'lake_water'
   | 'tent_pitch'
+  | 'parking'
 
 export interface Location {
   id: string
@@ -75,10 +76,11 @@ export interface Location {
   elevation?: number       // in meters (e.g. 501)
   shelterCapacity?: number // number of people who fit inside the shelter (0 if none)
   tentSpaces?: number      // number of tent pitching spaces available
+  hasParking?: boolean     // true when this location has parking and acts as a trailhead
   summary?: string         // brief 2-sentence description for cards/drawers
   amenities: LocationAmenity[]
   /**
-   * Self-referencing link to another Location where category === 'trailhead'
+   * Self-referencing link to a Location with parking (a trailhead)
    */
   trailhead?: Relation<Location>
   coverImage?: CmsMedia
