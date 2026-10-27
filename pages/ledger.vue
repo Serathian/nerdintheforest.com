@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { calculateReadTime, formatDispatchDateRange } from '~/utils/formatters'
+import type { Dispatch, Location } from '~/types/models'
 
 useHead({
   title: 'Field Ledger & Dispatches — Nerd in the Forest',
@@ -13,46 +16,135 @@ useHead({
   ]
 })
 
-const { fieldNotes } = useNitfCms()
+const router = useRouter()
+const { dispatches, locations, areas, fetchAreas, fetchWaypoints, fetchPosts } = useNitfCms()
+
+await useAsyncData('nitf-ledger-dispatches', async () => {
+  await Promise.all([
+    fetchAreas(),
+    fetchWaypoints(),
+    fetchPosts()
+  ])
+  return dispatches.value
+})
+
+onMounted(async () => {
+  await Promise.all([
+    fetchAreas(),
+    fetchWaypoints(),
+    fetchPosts()
+  ])
+})
+
 const searchQuery = ref('')
 const selectedCategory = ref('ALL')
-const selectedNote = ref<any>(null)
-const isReaderOpen = ref(false)
 
 const categories = [
-  { id: 'ALL', label: 'All Entries' },
+  { id: 'ALL', label: 'All Dispatches' },
   { id: 'SHELTER', label: 'Shelters' },
   { id: 'HEARTH', label: 'Hearths' },
   { id: 'SPRINGHEAD', label: 'Springs' },
   { id: 'VIEWPOINT', label: 'Viewpoints' }
 ]
 
-const filteredNotes = computed(() => {
-  return fieldNotes.value.filter(note => {
+const defaultHeroImages = [
+  'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1200&q=80',
+  'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=1200&q=80'
+]
+
+function resolveDispatchLocations(dispatch: Dispatch): Array<{ id: string; slug: string; name: string; category: string; areaName: string; elevation?: number }> {
+  if (!Array.isArray(dispatch.locations)) return []
+  return dispatch.locations.map((locRef: any) => {
+    const refId = typeof locRef === 'object' && locRef !== null ? (locRef.slug || locRef.id) : String(locRef)
+    const found = locations.value.find(
+      l => l.slug === refId || l.id === refId || (locRef?.cmsId && l.id === locRef.cmsId)
+    )
+    const name = found?.name || (typeof locRef === 'object' && locRef !== null ? (locRef.name || locRef.title) : refId) || 'Surveyed Waypoint'
+    const category = (found?.category || (typeof locRef === 'object' && locRef !== null ? locRef.category : 'shelter') || 'shelter').toUpperCase()
+    const rawArea = found?.area || (typeof locRef === 'object' && locRef !== null ? locRef.area : '')
+    const areaKey = typeof rawArea === 'object' && rawArea !== null ? (rawArea.slug || rawArea.id) : String(rawArea || '')
+    const areaObj = areas.value.find(a => a.slug === areaKey || a.id === areaKey)
+    const areaName = areaObj?.name || (typeof rawArea === 'string' && rawArea ? rawArea : (areas.value[0]?.name || 'Pirkanmaa'))
+    const elevation = found?.elevation ?? (typeof locRef === 'object' && locRef !== null ? locRef.elevation : undefined)
+
+    return {
+      id: found?.id || refId,
+      slug: found?.slug || refId,
+      name,
+      category,
+      areaName,
+      elevation
+    }
+  })
+}
+
+function getCategoryIcon(cat: string): string {
+  const c = (cat || '').toLowerCase()
+  if (c.includes('shelter')) return 'cabin'
+  if (c.includes('hearth') || c.includes('fire')) return 'outdoor_grill'
+  if (c.includes('spring') || c.includes('water')) return 'water_drop'
+  if (c.includes('view') || c.includes('vista') || c.includes('summit')) return 'landscape'
+  return 'explore'
+}
+
+const enrichedDispatches = computed(() => {
+  return [...dispatches.value]
+    .sort((a, b) => new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime())
+    .map((d) => {
+      const resolvedLocs = resolveDispatchLocations(d)
+      const rawHero = typeof d.heroImage === 'object' && d.heroImage !== null ? d.heroImage.url : d.heroImage
+      const heroImage = rawHero || ''
+      const primaryArea = resolvedLocs[0]?.areaName || areas.value[0]?.name || 'Pirkanmaa'
+      const dateLabel = formatDispatchDateRange(d.startDate, d.endDate, d.publishedAt)
+      const readTime = calculateReadTime(d.content?.length ? d.content : d.excerpt)
+      const loadoutTitle = typeof d.loadout === 'object' && d.loadout !== null ? d.loadout.title : undefined
+
+      return {
+        ...d,
+        resolvedLocs,
+        heroImage,
+        primaryArea,
+        dateLabel,
+        readTime,
+        loadoutTitle
+      }
+    })
+})
+
+const filteredDispatches = computed(() => {
+  return enrichedDispatches.value.filter(d => {
     if (selectedCategory.value !== 'ALL') {
-      const matchCat = note.category?.toUpperCase() === selectedCategory.value
-      const matchTag = note.numberTag?.toUpperCase().includes(selectedCategory.value)
-      if (!matchCat && !matchTag) return false
+      const matchesCat = d.resolvedLocs.some(loc => loc.category.includes(selectedCategory.value))
+      if (!matchesCat) return false
     }
     if (searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase().trim()
-      const matchTitle = note.title.toLowerCase().includes(q)
-      const matchDesc = note.description.toLowerCase().includes(q)
-      const matchContent = note.content?.some(c => c.toLowerCase().includes(q))
-      if (!matchTitle && !matchDesc && !matchContent) return false
+      const searchable = [
+        d.title,
+        d.excerpt,
+        d.weather,
+        d.primaryArea,
+        d.loadoutTitle,
+        ...(d.content || []),
+        ...d.resolvedLocs.map(l => `${l.name} ${l.category} ${l.areaName}`)
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      if (!q.split(/\s+/).every(term => searchable.includes(term))) return false
     }
     return true
   })
 })
 
-function openDispatch(note: any) {
-  selectedNote.value = note
-  isReaderOpen.value = true
-}
+const primaryArchiveAreaLabel = computed(() => {
+  return (areas.value[0]?.name || 'PIRKANMAA').toUpperCase()
+})
 
-function closeDispatch() {
-  isReaderOpen.value = false
-  selectedNote.value = null
+function openDispatch(dispatch: { slug: string; id: string }) {
+  router.push(`/dispatches/${dispatch.slug || dispatch.id}`)
 }
 </script>
 
@@ -63,11 +155,11 @@ function closeDispatch() {
       <header class="ledger-header">
         <div class="header-pre font-mono">
           <span class="header-beacon" />
-          <span>EXPEDITION ARCHIVE // NORDMARKA</span>
+          <span>EXPEDITION ARCHIVE // {{ primaryArchiveAreaLabel }}</span>
         </div>
         <h1 class="ledger-title font-serif">Field Ledger</h1>
         <p class="ledger-intro font-serif">
-          Chronological field notes, cabin observations, and Nordic route surveys written in the backcountry.
+          Chronological field dispatches, cabin observations, and Nordic route surveys written in the backcountry.
         </p>
 
         <!-- Search Bar -->
@@ -76,7 +168,7 @@ function closeDispatch() {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search entries, keywords, weather..."
+            placeholder="Search dispatches, locations, weather, or gear..."
             class="ledger-search-input font-mono"
           />
           <button
@@ -90,7 +182,7 @@ function closeDispatch() {
         </div>
 
         <!-- Filter Chips -->
-        <div class="filter-chips-row">
+        <div class="filter-chips-row scroll-hint-x">
           <button
             v-for="cat in categories"
             :key="cat.id"
@@ -105,60 +197,72 @@ function closeDispatch() {
 
       <!-- Entries Stream -->
       <main class="entries-stream">
-        <div v-if="filteredNotes.length === 0" class="empty-state font-mono">
+        <div v-if="filteredDispatches.length === 0" class="empty-state font-mono">
           <span class="material-symbols-outlined" style="font-size: 28px; color: var(--color-outline);">travel_explore</span>
           <p>No field dispatches match current query.</p>
         </div>
 
         <article
-          v-for="note in filteredNotes"
-          :key="note.id"
+          v-for="(dispatch, idx) in filteredDispatches"
+          :key="dispatch.id"
           class="ledger-card"
-          @click="openDispatch(note)"
+          @click="openDispatch(dispatch)"
         >
           <!-- Card Thumbnail Hero -->
-          <div v-if="note.heroImage" class="card-hero-wrap">
-            <img :src="note.heroImage" :alt="note.title" class="card-hero-img" loading="lazy" />
-            <div v-if="note.area" class="hero-overlay-tag font-mono">
-              {{ note.area }}
+          <div class="card-hero-wrap">
+            <img :src="dispatch.heroImage || defaultHeroImages[idx % defaultHeroImages.length]" :alt="dispatch.title" class="card-hero-img" loading="lazy" />
+            <div v-if="dispatch.primaryArea" class="hero-overlay-tag font-mono">
+              {{ dispatch.primaryArea }}
             </div>
           </div>
 
           <!-- Card Body -->
           <div class="card-content">
             <div class="meta-row font-mono">
-              <span class="meta-date">{{ note.date || note.timeAgo }}</span>
+              <span class="meta-date">{{ dispatch.dateLabel }}</span>
               <span class="meta-sep">•</span>
-              <span class="meta-read">{{ note.readTime || '3 MIN READ' }}</span>
-              <span class="meta-sep">•</span>
-              <span class="meta-weather">{{ note.weather }}</span>
+              <span class="meta-read">{{ dispatch.readTime }}</span>
+              <template v-if="dispatch.weather">
+                <span class="meta-sep">•</span>
+                <span class="meta-weather">{{ dispatch.weather }}</span>
+              </template>
             </div>
 
-            <h2 class="card-headline font-serif">{{ note.title }}</h2>
+            <h2 class="card-headline font-serif">{{ dispatch.title }}</h2>
 
             <p class="card-excerpt font-serif">
-              {{ note.description }}
+              {{ dispatch.excerpt }}
             </p>
 
-            <!-- Amenities / Surveyor Tags -->
+            <!-- Visited Locations & Loadout Tags -->
             <div class="card-tags-row">
               <span
-                v-for="amenity in note.amenities?.slice(0, 3)"
-                :key="amenity.label"
+                v-for="loc in dispatch.resolvedLocs.slice(0, 4)"
+                :key="loc.id"
                 class="tag-pill font-mono"
               >
-                <span class="material-symbols-outlined tag-icon">{{ amenity.icon }}</span>
-                {{ amenity.label }}
+                <span class="material-symbols-outlined tag-icon">{{ getCategoryIcon(loc.category) }}</span>
+                {{ loc.name }}
+              </span>
+              <span
+                v-if="dispatch.resolvedLocs.length > 4"
+                class="tag-pill font-mono"
+              >
+                +{{ dispatch.resolvedLocs.length - 4 }} MORE
+              </span>
+              <span
+                v-if="dispatch.loadoutTitle"
+                class="tag-pill font-mono"
+              >
+                <span class="material-symbols-outlined tag-icon">backpack</span>
+                {{ dispatch.loadoutTitle }}
               </span>
             </div>
 
             <!-- Footer Action -->
             <div class="card-footer">
-              <span v-if="note.elevation" class="coord-tag font-mono">
-                {{ note.elevation }}m ELEV
-              </span>
-              <span v-else-if="note.area" class="coord-tag font-mono">
-                {{ note.area.toUpperCase() }}
+              <span class="coord-tag font-mono">
+                {{ dispatch.resolvedLocs.length }} {{ dispatch.resolvedLocs.length === 1 ? 'WAYPOINT' : 'WAYPOINTS' }}
               </span>
               <span class="read-action font-mono">
                 READ DISPATCH <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>
@@ -168,14 +272,6 @@ function closeDispatch() {
         </article>
       </main>
     </div>
-
-    <!-- Reader View -->
-    <DispatchReader
-      :note="selectedNote"
-      :is-open="isReaderOpen"
-      @close="closeDispatch"
-      @back-to-map="closeDispatch"
-    />
   </div>
 </template>
 
@@ -271,12 +367,7 @@ function closeDispatch() {
   display: flex;
   gap: 6px;
   overflow-x: auto;
-  scrollbar-width: none;
-  padding: 2px 0;
-}
-
-.filter-chips-row::-webkit-scrollbar {
-  display: none;
+  padding: 2px 16px 2px 0;
 }
 
 .filter-chip {

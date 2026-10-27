@@ -1,4 +1,4 @@
-import { defineEventHandler, getRouterParam, proxyRequest, createError } from 'h3'
+import { defineEventHandler, getRouterParam, createError } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
@@ -15,10 +15,10 @@ export default defineEventHandler(async (event) => {
   const targetUrl = `${targetBase}/${path}${queryString}`
 
   try {
-    return await proxyRequest(event, targetUrl)
+    return await $fetch(targetUrl)
   } catch (err: any) {
     throw createError({
-      statusCode: 502,
+      statusCode: err?.response?.status || 502,
       statusMessage: `CMS Proxy Error: ${err?.message || 'Could not connect to CMS'}`,
     })
   }

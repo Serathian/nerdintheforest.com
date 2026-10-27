@@ -14,7 +14,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="dispatches-track-container">
-    <div v-if="dispatches.length > 0" class="dispatches-scroll-track scrollbar-none">
+    <div v-if="dispatches.length > 0" class="dispatches-scroll-track scroll-hint-x">
       <article v-for="disp in dispatches" :key="disp.id" class="dispatch-card">
         <div class="dispatch-card-top">
           <div class="dispatch-card-title-row">

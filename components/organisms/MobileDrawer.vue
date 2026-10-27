@@ -35,6 +35,8 @@ const emit = defineEmits<{
   (e: 'select-note', id: string): void
   (e: 'select-leg', index: number): void
   (e: 'clear-leg'): void
+  (e: 'hover-note', id: string | null): void
+  (e: 'hover-leg', index: number | null): void
   (e: 'clear-selected'): void
   (e: 'read-story', target: any): void
   (e: 'navigate', payload: { id: string; lat: number; lng: number }): void
@@ -165,6 +167,8 @@ function handleNavigate(note: FieldNote) {
           @select-waypoint="(id) => emit('select-note', id)"
           @select-leg="(idx) => emit('select-leg', idx)"
           @clear-leg="emit('clear-leg')"
+          @hover-waypoint="(id) => emit('hover-note', id)"
+          @hover-leg="(idx) => emit('hover-leg', idx)"
           @exit="emit('exit-inspection')"
           @read-dispatch="(slug) => emit('read-story', slug)"
         />

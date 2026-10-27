@@ -355,6 +355,21 @@ export const mockLoadouts: Loadout[] = [
       { item: mockGearItems.find(i => i.id === 'lapland-kuksa')!, status: 'packed' },
       { item: mockGearItems.find(i => i.id === 'silva-expedition')!, status: 'essential' }
     ]
+  },
+  {
+    id: 'autumn-packraft-recon',
+    slug: 'autumn-packraft-recon',
+    title: 'Autumn Lake Traverse & Packraft Kit',
+    season: 'autumn',
+    tempRange: '0°C to 8°C',
+    description: 'Amphibious lake-hopping and pine peninsula bivouacs in late October',
+    items: [
+      { item: mockGearItems.find(i => i.id === 'hilleberg-akto')!, status: 'packed' },
+      { item: mockGearItems.find(i => i.id === 'alpacka-classic')!, status: 'packed' },
+      { item: mockGearItems.find(i => i.id === 'aquabound-paddle')!, status: 'packed' },
+      { item: mockGearItems.find(i => i.id === 'trangia-27')!, status: 'packed' },
+      { item: mockGearItems.find(i => i.id === 'silva-expedition')!, status: 'essential' }
+    ]
   }
 ]
 
@@ -364,6 +379,10 @@ export const mockLoadouts: Loadout[] = [
 
 export interface GearInsight {
   id: string
+  gearItemId?: string
+  gearItemName?: string
+  gearCategory?: GearCategory
+  gearCategoryLabel?: string
   tag: string
   category: 'DURABILITY' | 'THERMAL' | 'MAINTENANCE' | 'PHILOSOPHY'
   title: string
@@ -378,23 +397,42 @@ export interface GearInsight {
   telemetry: { label: string; value: string }[]
 }
 
+export interface GearItemLoadoutRef {
+  id: string
+  slug: string
+  title: string
+  season: string
+}
+
+export interface LoadoutDispatchRef {
+  id: string
+  slug: string
+  title: string
+  date?: string
+}
+
 export interface LoadoutCategory {
   name: string
   items: Array<{
     id: string
     name: string
+    brand?: string
     spec: string
-    status: 'PACKED' | 'ESSENTIAL' | 'READY' | 'WORN'
+    status: 'PACKED' | 'ESSENTIAL' | 'READY' | 'WORN' | 'CONSUMABLE' | ''
     weight: string
     weightGrams: number
     note: string
     category: string
+    categoryKey?: GearCategory
     insightId?: string
+    insightIds?: string[]
+    loadouts?: GearItemLoadoutRef[]
   }>
 }
 
 export interface LoadoutKit {
   id: string
+  slug?: string
   season: 'AUTUMN' | 'WINTER' | 'SPRING' | 'SUMMER'
   label: string
   title: string
@@ -402,10 +440,12 @@ export interface LoadoutKit {
   tempRange: string
   terrain?: string
   baseWeightKg: number
+  totalItemsCount?: number
   categories: LoadoutCategory[]
+  dispatches?: LoadoutDispatchRef[]
 }
 
-const CATEGORY_NAMES: Record<GearCategory, string> = {
+export const CATEGORY_NAMES: Record<GearCategory, string> = {
   shelter_sleep: 'SHELTER & SLEEP',
   cook_water: 'COOK & WATER',
   navigation_tools: 'NAVIGATION & TOOLS',
@@ -413,32 +453,110 @@ const CATEGORY_NAMES: Record<GearCategory, string> = {
   hygiene_repair: 'FIELD REPAIR & HYGIENE'
 }
 
-// Convert mockLoadouts into LoadoutKit format expected by gear.vue
-export const mockLoadoutKits: LoadoutKit[] = mockLoadouts.map(loadout => {
-  const stats = calculateLoadoutStats(loadout)
+export function getMatchingReviewsForItem(item: ModelGearItem, reviews: GearReview[] = []): GearReview[] {
+  return reviews.filter(r => {
+    const rItem = r.gearItem as ModelGearItem
+    if (rItem && typeof rItem === 'object') {
+      return String(rItem.id) === String(item.id) || rItem.name?.toLowerCase() === item.name?.toLowerCase()
+    }
+    return String(r.gearItem) === String(item.id)
+  })
+}
+
+export function getMatchingLoadoutsForItem(
+  item: ModelGearItem,
+  loadouts: Loadout[] = []
+): GearItemLoadoutRef[] {
+  const matches: GearItemLoadoutRef[] = []
+  loadouts.forEach(loadout => {
+    const hasItem = (loadout.items || []).some(entry => {
+      const entryItem = entry.item as ModelGearItem
+      if (entryItem && typeof entryItem === 'object') {
+        return String(entryItem.id) === String(item.id) || entryItem.name?.toLowerCase() === item.name?.toLowerCase()
+      }
+      return String(entry.item) === String(item.id)
+    })
+    if (hasItem) {
+      matches.push({
+        id: loadout.slug || String(loadout.id),
+        slug: loadout.slug || String(loadout.id),
+        title: loadout.title,
+        season: (loadout.season || 'autumn').toUpperCase()
+      })
+    }
+  })
+  return matches
+}
+
+export function convertGearItemsToCategories(
+  items: ModelGearItem[] = [],
+  reviews: GearReview[] = [],
+  loadouts: Loadout[] = []
+): LoadoutCategory[] {
   const catMap = new Map<string, any[]>()
 
-  loadout.items.forEach(entry => {
-    const item = entry.item as ModelGearItem
+  items.forEach(item => {
     const catName = CATEGORY_NAMES[item.category] || 'MISC'
     if (!catMap.has(catName)) {
       catMap.set(catName, [])
     }
-    const matchingReview = mockGearReviews.find(r => (r.gearItem as ModelGearItem).id === item.id)
+    const matchingReviews = getMatchingReviewsForItem(item, reviews)
+    const matchingLoadouts = getMatchingLoadoutsForItem(item, loadouts)
     catMap.get(catName)!.push({
-      id: item.id,
+      id: String(item.id),
       name: item.name,
-      spec: item.specNote || `${item.brand} • ${formatWeight(item.weightGrams)}`,
-      status: entry.status.toUpperCase(),
+      brand: item.brand,
+      spec: item.specNote ? `${item.brand} • ${item.specNote}` : `${item.brand} • ${formatWeight(item.weightGrams)}`,
+      status: matchingLoadouts.length > 0 ? 'PACKED' : '',
       weight: formatWeight(item.weightGrams),
       weightGrams: item.weightGrams,
       note: item.notes || '',
       category: catName,
-      insightId: matchingReview?.id
+      categoryKey: item.category,
+      insightId: matchingReviews[0]?.id,
+      insightIds: matchingReviews.map(r => r.id),
+      loadouts: matchingLoadouts
     })
   })
 
-  const seasonUpper = loadout.season.toUpperCase() as 'AUTUMN' | 'WINTER' | 'SPRING' | 'SUMMER'
+  return Array.from(catMap.entries()).map(([name, catItems]) => ({ name, items: catItems }))
+}
+
+export function convertLoadoutToKit(
+  loadout: Loadout,
+  reviews: GearReview[] = [],
+  allDispatches: Array<{ id: string; slug: string; title: string; publishedAt?: string; loadout?: any }> = []
+): LoadoutKit {
+  const stats = calculateLoadoutStats(loadout)
+  const catMap = new Map<string, any[]>()
+  let itemCount = 0
+
+  loadout.items.forEach(entry => {
+    const item = entry.item as ModelGearItem
+    if (!item || typeof item !== 'object') return
+    itemCount += 1
+    const catName = CATEGORY_NAMES[item.category] || 'MISC'
+    if (!catMap.has(catName)) {
+      catMap.set(catName, [])
+    }
+    const matchingReviews = getMatchingReviewsForItem(item, reviews)
+    catMap.get(catName)!.push({
+      id: String(item.id),
+      name: item.name,
+      brand: item.brand,
+      spec: item.specNote || `${item.brand} • ${formatWeight(item.weightGrams)}`,
+      status: (entry.status || 'packed').toUpperCase(),
+      weight: formatWeight(item.weightGrams),
+      weightGrams: item.weightGrams,
+      note: entry.customNote || item.notes || '',
+      category: catName,
+      categoryKey: item.category,
+      insightId: matchingReviews[0]?.id,
+      insightIds: matchingReviews.map(r => r.id)
+    })
+  })
+
+  const seasonUpper = (loadout.season || 'autumn').toUpperCase() as 'AUTUMN' | 'WINTER' | 'SPRING' | 'SUMMER'
   const labels: Record<string, string> = {
     AUTUMN: 'Autumn / Taiga',
     WINTER: 'Winter / Sub-Zero',
@@ -446,41 +564,100 @@ export const mockLoadoutKits: LoadoutKit[] = mockLoadouts.map(loadout => {
     SUMMER: 'Summer / Boreal'
   }
 
+  const loadoutSlug = loadout.slug || String(loadout.id)
+  const dispatchesMap = new Map<string, LoadoutDispatchRef>()
+
+  if (Array.isArray(loadout.dispatches)) {
+    loadout.dispatches.forEach((d: any) => {
+      if (d && typeof d === 'object') {
+        const dSlug = d.slug || String(d.id)
+        dispatchesMap.set(dSlug, {
+          id: String(d.id || dSlug),
+          slug: dSlug,
+          title: d.title || 'Field Dispatch',
+          date: d.publishedAt || d.published_at
+        })
+      }
+    })
+  }
+
+  allDispatches.forEach(d => {
+    if (!d.loadout) return
+    const lRef = typeof d.loadout === 'object' ? (d.loadout.slug || String(d.loadout.id)) : String(d.loadout)
+    if (lRef === loadoutSlug || lRef === String(loadout.id)) {
+      const dSlug = d.slug || String(d.id)
+      dispatchesMap.set(dSlug, {
+        id: String(d.id || dSlug),
+        slug: dSlug,
+        title: d.title,
+        date: d.publishedAt
+      })
+    }
+  })
+
   return {
-    id: seasonUpper,
+    id: loadoutSlug,
+    slug: loadoutSlug,
     season: seasonUpper,
     label: labels[seasonUpper] || loadout.title,
     title: loadout.title,
     subtitle: loadout.description || '',
     tempRange: loadout.tempRange,
+    terrain: loadout.description || 'Nordic Wilderness',
     baseWeightKg: Number(stats.baseWeightKg),
-    categories: Array.from(catMap.entries()).map(([name, items]) => ({ name, items }))
+    totalItemsCount: itemCount,
+    categories: Array.from(catMap.entries()).map(([name, items]) => ({ name, items })),
+    dispatches: Array.from(dispatchesMap.values())
   }
-})
+}
 
-// Convert mockGearReviews into GearInsight format expected by InsightReader.vue
-export const mockGearInsights: GearInsight[] = mockGearReviews.map(r => {
-  const item = r.gearItem as ModelGearItem
-  const categoryUpper = r.topic.toUpperCase() as 'DURABILITY' | 'THERMAL' | 'MAINTENANCE' | 'PHILOSOPHY'
-  const image = typeof r.heroImage === 'string' ? r.heroImage : r.heroImage?.url || ''
+export function convertReviewToInsight(r: GearReview): GearInsight {
+  const item = (typeof r.gearItem === 'object' && r.gearItem !== null
+    ? r.gearItem
+    : { id: String(r.gearItem || ''), name: r.title, brand: 'Field Tested', category: 'shelter_sleep' as GearCategory, weightGrams: 0 }) as ModelGearItem
+  const categoryUpper = (r.topic || 'durability').toUpperCase() as 'DURABILITY' | 'THERMAL' | 'MAINTENANCE' | 'PHILOSOPHY'
+  const rawImage = typeof r.heroImage === 'string'
+    ? r.heroImage
+    : r.heroImage?.url || (typeof item.image === 'string' ? item.image : item.image?.url) || ''
+  const image = rawImage
+
+  let formattedDate = r.publishedAt
+  if (r.publishedAt && /^\d{4}-\d{2}-\d{2}/.test(r.publishedAt) && r.publishedAt.includes('T')) {
+    const parsed = new Date(r.publishedAt)
+    if (!Number.isNaN(parsed.getTime())) {
+      formattedDate = parsed.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()
+    }
+  }
+
+  const gearCategoryLabel = (CATEGORY_NAMES[item.category] || item.category || 'SHELTER & SLEEP').toUpperCase()
 
   return {
     id: r.id,
+    gearItemId: String(item.id),
+    gearItemName: `${item.brand} ${item.name}`.trim(),
+    gearCategory: item.category,
+    gearCategoryLabel,
     tag: `${categoryUpper} LOG`,
     category: categoryUpper,
     title: r.title,
-    date: r.publishedAt,
-    readTime: calculateReadTime(r.keyTakeaways),
+    date: formattedDate,
+    readTime: calculateReadTime(r.keyTakeaways?.length ? r.keyTakeaways : r.content),
     image,
-    equipmentTested: `${item.brand} ${item.name} (${item.specNote || ''})`,
+    equipmentTested: item.specNote ? `${item.brand} ${item.name} (${item.specNote})` : `${item.brand} ${item.name}`,
     duration: r.durationTested,
     summary: r.summary,
-    observations: r.keyTakeaways,
+    observations: r.keyTakeaways || [],
     verdict: r.verdict,
     telemetry: [
-      { label: 'ITEM WEIGHT', value: formatWeight(item.weightGrams).toUpperCase() },
-      { label: 'CATEGORY', value: (CATEGORY_NAMES[item.category] || item.category).toUpperCase() },
-      { label: 'BRAND', value: item.brand.toUpperCase() }
+      { label: 'ITEM WEIGHT', value: formatWeight(item.weightGrams || 0).toUpperCase() },
+      { label: 'CATEGORY', value: gearCategoryLabel },
+      { label: 'BRAND', value: (item.brand || 'FIELD').toUpperCase() }
     ]
   }
-})
+}
+
+// Convert mockLoadouts into LoadoutKit format expected by gear.vue
+export const mockLoadoutKits: LoadoutKit[] = mockLoadouts.map(l => convertLoadoutToKit(l, mockGearReviews))
+
+// Convert mockGearReviews into GearInsight format expected by InsightReader.vue
+export const mockGearInsights: GearInsight[] = mockGearReviews.map(convertReviewToInsight)

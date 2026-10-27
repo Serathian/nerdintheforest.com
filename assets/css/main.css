@@ -168,6 +168,28 @@ html, body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Subtle Horizontal Scroll Hint (No scrollbar bulk — soft edge fade mask) */
+.scroll-hint-x {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 32px), transparent 100%);
+}
+
+.scroll-hint-x::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-hint-x.scrolled-mid {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 24px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 24px, #000 calc(100% - 32px), transparent 100%);
+}
+
+.scroll-hint-x.scrolled-end {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 24px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 24px, #000 100%);
+}
+
 /* Z-Index Layering Fallbacks */
 .z-10 { z-index: 10 !important; }
 .z-20 { z-index: 20 !important; }

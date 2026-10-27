@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import type { Dispatch } from '~/types/models'
-import { haversineKm, formatDistance } from '~/utils/geo'
-import ElevationProfile from '../atoms/ElevationProfile.vue'
+import { haversineKm, formatDistance, polylineDistanceKm, splitRouteWithRemainder } from '~/utils/geo'
+import ElevationProfile, { type ElevationHighlightedRange } from '../atoms/ElevationProfile.vue'
 
 interface WaypointItem {
   id: string
@@ -30,13 +30,62 @@ const emit = defineEmits<{
   (e: 'select-waypoint', id: string): void
   (e: 'select-leg', index: number): void
   (e: 'clear-leg'): void
+  (e: 'hover-waypoint', id: string | null): void
+  (e: 'hover-leg', index: number | null): void
   (e: 'exit'): void
   (e: 'read-dispatch', slug: string): void
 }>()
 
+const hoveredLocationId = ref<string | null>(null)
+const hoveredLegIndex = ref<number | null>(null)
+
+function handleWaypointEnter(id: string) {
+  if (hoveredLegIndex.value !== null) {
+    hoveredLegIndex.value = null
+    emit('hover-leg', null)
+  }
+  hoveredLocationId.value = id
+  emit('hover-waypoint', id)
+}
+
+function handleWaypointLeave(id: string) {
+  if (hoveredLocationId.value === id) {
+    hoveredLocationId.value = null
+    emit('hover-waypoint', null)
+  }
+}
+
+function handleLegEnter(index: number) {
+  if (hoveredLocationId.value !== null) {
+    hoveredLocationId.value = null
+    emit('hover-waypoint', null)
+  }
+  hoveredLegIndex.value = index
+  emit('hover-leg', index)
+}
+
+function handleLegLeave(index: number) {
+  if (hoveredLegIndex.value === index) {
+    hoveredLegIndex.value = null
+    emit('hover-leg', null)
+  }
+}
+
+function handleTimelineLeave() {
+  if (hoveredLocationId.value !== null) {
+    hoveredLocationId.value = null
+    emit('hover-waypoint', null)
+  }
+  if (hoveredLegIndex.value !== null) {
+    hoveredLegIndex.value = null
+    emit('hover-leg', null)
+  }
+}
+
 interface LegItem {
   index: number
   letter: string
+  segmentLabel: string
   distanceKm: number
   distanceFormatted: string
   fromId: string
@@ -47,35 +96,83 @@ interface LegItem {
   elevationLoss: number
   fromTitle: string
   toTitle: string
+  routeGeometry?: Array<[number, number]> | null
+  profileWaypoints?: Array<{ order: number; title: string; fraction: number; elevation?: number }>
 }
+
+const routeSplit = computed(() => {
+  const rawGeom: Array<[number, number]> | undefined =
+    props.dispatch?.trailGeometry || (props.dispatch as any)?.trail_geometry
+  const hasGpx = Array.isArray(rawGeom) && rawGeom.length >= 2
+  const wpCoords = (props.waypoints || []).map(w => ({ lng: w.longitude ?? 0, lat: w.latitude ?? 0 }))
+  const split = splitRouteWithRemainder(hasGpx ? rawGeom : undefined, wpCoords)
+  return { hasGpx, rawGeom, ...split }
+})
+
+const prefixLeg = computed<LegItem | null>(() => {
+  if (!props.waypoints || props.waypoints.length === 0) return null
+  const { hasGpx, prefix } = routeSplit.value
+  if (!hasGpx || !prefix || prefix.length < 2) return null
+
+  const distKm = polylineDistanceKm(prefix)
+  if (distKm < 0.05) return null
+
+  const firstWp = props.waypoints[0]
+  const destElev = Math.round(firstWp?.elevation ?? 250)
+  const startElev = destElev
+  const undulatingMargin = Math.max(12, Math.round(distKm * 18))
+
+  return {
+    index: -1,
+    letter: 'START',
+    segmentLabel: 'START LEG',
+    distanceKm: Number(distKm.toFixed(1)),
+    distanceFormatted: formatDistance(distKm),
+    fromId: 'route-start',
+    toId: firstWp.id,
+    startElevation: startElev,
+    destinationElevation: destElev,
+    elevationGain: undulatingMargin,
+    elevationLoss: undulatingMargin,
+    fromTitle: 'TRAIL START',
+    toTitle: firstWp.title,
+    routeGeometry: prefix
+  }
+})
 
 const legs = computed<LegItem[]>(() => {
   const list: LegItem[] = []
   if (!props.waypoints || props.waypoints.length < 2) return list
 
+  const { hasGpx, legs: splitLegs } = routeSplit.value
+
   for (let i = 0; i < props.waypoints.length - 1; i++) {
     const from = props.waypoints[i]
     const to = props.waypoints[i + 1]
     let distKm = 0
-    if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
+    if (hasGpx && splitLegs[i] && splitLegs[i].length >= 2) {
+      distKm = polylineDistanceKm(splitLegs[i])
+    } else if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
       distKm = haversineKm([from.longitude, from.latitude], [to.longitude, to.latitude])
     }
 
-    const startElev = from.elevation ?? 250
-    const destElev = to.elevation ?? 280
+    const startElev = Math.round(from.elevation ?? to.elevation ?? 250)
+    const destElev = Math.round(to.elevation ?? from.elevation ?? 280)
     const netDiff = destElev - startElev
     const undulatingMargin = Math.max(12, Math.round(distKm * 18))
 
     const gain = to.elevationGain != null && to.elevationGain > 0
-      ? to.elevationGain
+      ? Math.round(to.elevationGain)
       : Math.max(0, netDiff) + undulatingMargin
     const loss = to.elevationLoss != null && to.elevationLoss > 0
-      ? to.elevationLoss
+      ? Math.round(to.elevationLoss)
       : Math.max(0, -netDiff) + undulatingMargin
 
+    const letter = String.fromCharCode(65 + i)
     list.push({
       index: i,
-      letter: String.fromCharCode(65 + i), // 0 -> 'A', 1 -> 'B', 2 -> 'C', etc.
+      letter,
+      segmentLabel: `LEG ${letter}`,
       distanceKm: Number(distKm.toFixed(1)),
       distanceFormatted: formatDistance(distKm),
       fromId: from.id,
@@ -85,15 +182,211 @@ const legs = computed<LegItem[]>(() => {
       elevationGain: gain,
       elevationLoss: loss,
       fromTitle: from.title,
-      toTitle: to.title
+      toTitle: to.title,
+      routeGeometry: splitLegs[i] || null
     })
   }
   return list
 })
 
+const suffixLeg = computed<LegItem | null>(() => {
+  if (!props.waypoints || props.waypoints.length === 0) return null
+  const { hasGpx, suffix } = routeSplit.value
+  if (!hasGpx || !suffix || suffix.length < 2) return null
+
+  const distKm = polylineDistanceKm(suffix)
+  if (distKm < 0.05) return null
+
+  const lastIdx = props.waypoints.length - 1
+  const lastWp = props.waypoints[lastIdx]
+  const firstWp = props.waypoints[0]
+  const startElev = Math.round(lastWp?.elevation ?? firstWp?.elevation ?? 250)
+  const destElev = Math.round(firstWp?.elevation ?? startElev)
+  const netDiff = destElev - startElev
+  const undulatingMargin = Math.max(12, Math.round(distKm * 18))
+  const letter = String.fromCharCode(65 + lastIdx)
+
+  return {
+    index: lastIdx,
+    letter,
+    segmentLabel: `LEG ${letter}`,
+    distanceKm: Number(distKm.toFixed(1)),
+    distanceFormatted: formatDistance(distKm),
+    fromId: lastWp.id,
+    toId: 'route-end',
+    startElevation: startElev,
+    destinationElevation: destElev,
+    elevationGain: Math.max(0, netDiff) + undulatingMargin,
+    elevationLoss: Math.max(0, -netDiff) + undulatingMargin,
+    fromTitle: lastWp.title,
+    toTitle: 'TRAIL END',
+    routeGeometry: suffix
+  }
+})
+
+function getLegByIndex(idx: number | null | undefined): LegItem | null {
+  if (idx === null || idx === undefined) return null
+  if (idx === -1) return prefixLeg.value
+  if (suffixLeg.value && idx === suffixLeg.value.index) return suffixLeg.value
+  return legs.value[idx] || null
+}
+
 const selectedLegData = computed<LegItem | null>(() => {
-  if (props.selectedLegIndex === null || props.selectedLegIndex === undefined) return null
-  return legs.value[props.selectedLegIndex] || null
+  return getLegByIndex(props.selectedLegIndex)
+})
+
+const effectiveLegHighlight = computed<number | null>(() => {
+  if (hoveredLegIndex.value !== null) return hoveredLegIndex.value
+  return props.selectedLegIndex ?? null
+})
+
+const wholeRouteData = computed(() => {
+  if (!props.waypoints || props.waypoints.length === 0) return null
+
+  const firstKnownElev = props.waypoints.find(w => w.elevation != null)?.elevation ?? 250
+  const lastKnownElev = [...props.waypoints].reverse().find(w => w.elevation != null)?.elevation ?? firstKnownElev
+
+  const startElev = Math.round(props.waypoints[0]?.elevation ?? firstKnownElev)
+  const destElev = Math.round(props.waypoints[props.waypoints.length - 1]?.elevation ?? lastKnownElev)
+
+  const { hasGpx, orientedGeometry } = routeSplit.value
+
+  const preDist = prefixLeg.value?.distanceKm ?? 0
+  const interDists = legs.value.map(l => l.distanceKm)
+  const sufDist = suffixLeg.value?.distanceKm ?? 0
+  const sumSegmentDists = preDist + interDists.reduce((a, b) => a + b, 0) + sufDist
+
+  const dispatchDist = props.dispatch?.distanceKm ?? (props.dispatch as any)?.distance_km
+  let totalDistKm = 0
+  if (dispatchDist != null && Number(dispatchDist) > 0) {
+    totalDistKm = Number(dispatchDist)
+  } else if (sumSegmentDists > 0) {
+    totalDistKm = sumSegmentDists
+  } else if (hasGpx) {
+    totalDistKm = polylineDistanceKm(orientedGeometry)
+  }
+
+  // Compute each waypoint's distance fraction along the full route for profile markers
+  const effectiveSpanKm = sumSegmentDists > 0 ? sumSegmentDists : Math.max(totalDistKm, 0.1)
+  const profileWaypoints: Array<{ order: number; title: string; fraction: number; elevation?: number }> = []
+  let cumKm = preDist
+  for (let i = 0; i < props.waypoints.length; i++) {
+    const wp = props.waypoints[i]
+    const frac = Math.max(0, Math.min(1, cumKm / effectiveSpanKm))
+    profileWaypoints.push({
+      order: wp.order,
+      title: wp.title,
+      fraction: frac,
+      elevation: wp.elevation
+    })
+    if (i < interDists.length) {
+      cumKm += interDists[i]
+    }
+  }
+
+  const dispatchGain = props.dispatch?.elevationGainM ?? (props.dispatch as any)?.elevation_gain_m
+  const dispatchLoss = props.dispatch?.elevationLossM ?? (props.dispatch as any)?.elevation_loss_m
+  const netDiff = destElev - startElev
+  const undulatingMargin = Math.max(12, Math.round(totalDistKm * 18))
+
+  const totalGain = dispatchGain != null && Number(dispatchGain) > 0
+    ? Math.round(Number(dispatchGain))
+    : legs.value.length > 0
+      ? Math.round(
+          (prefixLeg.value?.elevationGain ?? 0) +
+          legs.value.reduce((sum, leg) => sum + leg.elevationGain, 0) +
+          (suffixLeg.value?.elevationGain ?? 0)
+        )
+      : Math.max(0, netDiff) + undulatingMargin
+
+  const totalLoss = dispatchLoss != null && Number(dispatchLoss) > 0
+    ? Math.round(Number(dispatchLoss))
+    : legs.value.length > 0
+      ? Math.round(
+          (prefixLeg.value?.elevationLoss ?? 0) +
+          legs.value.reduce((sum, leg) => sum + leg.elevationLoss, 0) +
+          (suffixLeg.value?.elevationLoss ?? 0)
+        )
+      : Math.max(0, -netDiff) + undulatingMargin
+
+  const fromTitle = prefixLeg.value ? 'TRAIL START' : (props.waypoints[0]?.title || 'START')
+  const toTitle = suffixLeg.value ? 'TRAIL END' : (props.waypoints[props.waypoints.length - 1]?.title || 'FINISH')
+
+  return {
+    segmentLabel: 'FULL ROUTE',
+    startElevation: startElev,
+    destinationElevation: destElev,
+    elevationGain: totalGain,
+    elevationLoss: totalLoss,
+    distanceKm: Number(totalDistKm.toFixed(1)),
+    fromTitle,
+    toTitle,
+    routeGeometry: hasGpx ? orientedGeometry : null,
+    profileWaypoints
+  }
+})
+
+const isHoveringWholeRoutePreview = computed(() => {
+  if (hoveredLocationId.value !== null) return true
+  if (hoveredLegIndex.value !== null && hoveredLegIndex.value !== props.selectedLegIndex) return true
+  return false
+})
+
+const activeElevationData = computed(() => {
+  if (isHoveringWholeRoutePreview.value) return wholeRouteData.value
+  if (selectedLegData.value) return selectedLegData.value
+  return wholeRouteData.value
+})
+
+const hoveredWaypointOrder = computed<number | null>(() => {
+  if (hoveredLegIndex.value !== null) return null
+  const targetId = hoveredLocationId.value || (selectedLegData.value ? null : props.selectedLocationId)
+  if (!targetId) return null
+  const wp = props.waypoints.find(w => w.id === targetId || w.slug === targetId)
+  return wp ? wp.order : null
+})
+
+const highlightedProfileRange = computed<ElevationHighlightedRange | null>(() => {
+  const legIdx = hoveredLegIndex.value
+  if (legIdx === null || !wholeRouteData.value) return null
+  // Only highlight sub-range when viewing the full route profile
+  if (activeElevationData.value !== wholeRouteData.value) return null
+
+  const leg = getLegByIndex(legIdx)
+  if (!leg) return null
+
+  const pWaypoints = wholeRouteData.value.profileWaypoints || []
+  let startFraction = 0
+  let endFraction = 1
+  let startOrder: number | undefined
+  let endOrder: number | undefined
+
+  if (legIdx === -1) {
+    startFraction = 0
+    endFraction = pWaypoints[0]?.fraction ?? 0.2
+    endOrder = props.waypoints[0]?.order
+  } else if (suffixLeg.value && legIdx === suffixLeg.value.index) {
+    const lastIdx = props.waypoints.length - 1
+    startFraction = pWaypoints[lastIdx]?.fraction ?? 0.8
+    endFraction = 1
+    startOrder = props.waypoints[lastIdx]?.order
+  } else {
+    startFraction = pWaypoints[legIdx]?.fraction ?? 0
+    endFraction = pWaypoints[legIdx + 1]?.fraction ?? 1
+    startOrder = props.waypoints[legIdx]?.order
+    endOrder = props.waypoints[legIdx + 1]?.order
+  }
+
+  return {
+    startFraction,
+    endFraction,
+    label: leg.segmentLabel,
+    distanceKm: leg.distanceKm,
+    elevationGain: leg.elevationGain,
+    elevationLoss: leg.elevationLoss,
+    startOrder,
+    endOrder
+  }
 })
 
 function handleLegClick(index: number) {
@@ -125,18 +418,48 @@ function getCategoryIcon(cat?: string): string {
     </div>
 
     <!-- Sequential Timeline Stepper Track -->
-    <div class="timeline-stepper-track scrollbar-none">
+    <div class="timeline-stepper-track scroll-hint-x" @mouseleave="handleTimelineLeave">
       <div class="timeline-row">
+        <!-- Optional Prefix Leg Connector before first listed location -->
+        <div
+          v-if="prefixLeg"
+          :class="['timeline-leg-connector is-prefix font-mono', { 'is-active': selectedLegIndex === -1 || hoveredLegIndex === -1 }]"
+          role="button"
+          tabindex="0"
+          :aria-label="`Inspect start leg: ${prefixLeg.distanceFormatted}`"
+          :title="`Focus Trail Start → ${prefixLeg.toTitle} (${prefixLeg.distanceFormatted})`"
+          @click="handleLegClick(-1)"
+          @mouseenter="handleLegEnter(-1)"
+          @mouseleave="handleLegLeave(-1)"
+          @focus="handleLegEnter(-1)"
+          @blur="handleLegLeave(-1)"
+          @keydown.enter.prevent="handleLegClick(-1)"
+          @keydown.space.prevent="handleLegClick(-1)"
+        >
+          <span class="leg-terminal-dot start" />
+          <span class="leg-connector-line" />
+          <span class="leg-dist-pill">
+            <span class="leg-dist-text">{{ prefixLeg.distanceFormatted }}</span>
+          </span>
+        </div>
+
         <template v-for="(wp, idx) in waypoints" :key="wp.id">
           <!-- Minimified Waypoint Chip -->
           <div :class="[
             'timeline-step-chip font-mono',
             {
-              'is-selected': selectedLocationId === wp.id || selectedLocationId === wp.slug,
-              'is-leg-start': selectedLegIndex === idx,
-              'is-leg-end': selectedLegIndex !== null && selectedLegIndex !== undefined && idx === selectedLegIndex + 1
+              'is-selected': selectedLocationId === wp.id || selectedLocationId === wp.slug || hoveredLocationId === wp.id,
+              'is-leg-start': effectiveLegHighlight === idx,
+              'is-leg-end': effectiveLegHighlight !== null && idx === effectiveLegHighlight + 1
             }
-          ]" role="button" :title="`Focus ${wp.title}`" @click="emit('select-waypoint', wp.id)">
+          ]" role="button" tabindex="0" :title="`Focus ${wp.title}`"
+            @click="emit('select-waypoint', wp.id)"
+            @mouseenter="handleWaypointEnter(wp.id)"
+            @mouseleave="handleWaypointLeave(wp.id)"
+            @focus="handleWaypointEnter(wp.id)"
+            @blur="handleWaypointLeave(wp.id)"
+            @keydown.enter.prevent="emit('select-waypoint', wp.id)"
+            @keydown.space.prevent="emit('select-waypoint', wp.id)">
             <!-- Top Row: Sequence Number, Category Icon, Elevation with Symbol -->
             <div class="step-chip-top">
               <div class="step-chip-meta">
@@ -161,11 +484,15 @@ function getCategoryIcon(cat?: string): string {
 
           <!-- Minimal Leg Connector Line between waypoints -->
           <div v-if="idx < waypoints.length - 1 && legs[idx]"
-            :class="['timeline-leg-connector font-mono', { 'is-active': selectedLegIndex === idx }]" role="button"
+            :class="['timeline-leg-connector font-mono', { 'is-active': selectedLegIndex === idx || hoveredLegIndex === idx }]" role="button"
             tabindex="0"
             :aria-label="`Inspect leg ${legs[idx].letter}: ${legs[idx].distanceFormatted}`"
             :title="`Focus Leg ${legs[idx].letter} (${legs[idx].distanceFormatted})`"
             @click="handleLegClick(idx)"
+            @mouseenter="handleLegEnter(idx)"
+            @mouseleave="handleLegLeave(idx)"
+            @focus="handleLegEnter(idx)"
+            @blur="handleLegLeave(idx)"
             @keydown.enter.prevent="handleLegClick(idx)"
             @keydown.space.prevent="handleLegClick(idx)">
             <span class="leg-connector-line" />
@@ -174,19 +501,47 @@ function getCategoryIcon(cat?: string): string {
             </span>
           </div>
         </template>
+
+        <!-- Optional Suffix Leg Connector after last listed location -->
+        <div
+          v-if="suffixLeg"
+          :class="['timeline-leg-connector is-suffix font-mono', { 'is-active': selectedLegIndex === suffixLeg.index || hoveredLegIndex === suffixLeg.index }]"
+          role="button"
+          tabindex="0"
+          :aria-label="`Inspect finish leg: ${suffixLeg.distanceFormatted}`"
+          :title="`Focus ${suffixLeg.fromTitle} → Trail End (${suffixLeg.distanceFormatted})`"
+          @click="handleLegClick(suffixLeg.index)"
+          @mouseenter="handleLegEnter(suffixLeg.index)"
+          @mouseleave="handleLegLeave(suffixLeg.index)"
+          @focus="handleLegEnter(suffixLeg.index)"
+          @blur="handleLegLeave(suffixLeg.index)"
+          @keydown.enter.prevent="handleLegClick(suffixLeg.index)"
+          @keydown.space.prevent="handleLegClick(suffixLeg.index)"
+        >
+          <span class="leg-connector-line" />
+          <span class="leg-dist-pill">
+            <span class="leg-dist-text">{{ suffixLeg.distanceFormatted }}</span>
+          </span>
+          <span class="leg-terminal-dot end" />
+        </div>
       </div>
     </div>
 
-    <!-- Selected Leg Elevation Profile (matches Location page / MobileLocationPeek) -->
+    <!-- Trail Elevation Profile (Whole Route by default, or Selected Leg when focused) -->
     <ElevationProfile
-      v-if="selectedLegData"
-      :start-elevation="selectedLegData.startElevation"
-      :destination-elevation="selectedLegData.destinationElevation"
-      :elevation-gain="selectedLegData.elevationGain"
-      :elevation-loss="selectedLegData.elevationLoss"
-      :distance-km="selectedLegData.distanceKm"
-      :trailhead-name="selectedLegData.fromTitle"
-      :destination-name="selectedLegData.toTitle"
+      v-if="activeElevationData"
+      :start-elevation="activeElevationData.startElevation"
+      :destination-elevation="activeElevationData.destinationElevation"
+      :elevation-gain="activeElevationData.elevationGain"
+      :elevation-loss="activeElevationData.elevationLoss"
+      :distance-km="activeElevationData.distanceKm"
+      :trailhead-name="activeElevationData.fromTitle"
+      :destination-name="activeElevationData.toTitle"
+      :segment-label="activeElevationData.segmentLabel"
+      :route-geometry="activeElevationData.routeGeometry"
+      :waypoints="activeElevationData.profileWaypoints"
+      :highlighted-range="highlightedProfileRange"
+      :hovered-waypoint-order="hoveredWaypointOrder"
     />
 
     <!-- Actions Row -->
@@ -542,6 +897,41 @@ function getCategoryIcon(cat?: string): string {
 .timeline-leg-connector:hover .leg-dist-text,
 .timeline-leg-connector.is-active .leg-dist-text {
   color: var(--color-secondary, #d9531e);
+}
+
+.timeline-leg-connector.is-prefix {
+  padding-left: 10px;
+}
+
+.timeline-leg-connector.is-suffix {
+  padding-right: 10px;
+}
+
+.leg-terminal-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-outline-variant, #c2c8c2);
+  border: 1.5px solid var(--color-surface-container-low, #f8f3e7);
+  z-index: 4;
+  transition: all 0.16s ease;
+}
+
+.leg-terminal-dot.start {
+  left: 0;
+}
+
+.leg-terminal-dot.end {
+  right: 0;
+}
+
+.timeline-leg-connector:hover .leg-terminal-dot,
+.timeline-leg-connector.is-active .leg-terminal-dot {
+  background-color: var(--color-secondary, #d9531e);
+  transform: translateY(-50%) scale(1.15);
 }
 
 /* ACTIONS */

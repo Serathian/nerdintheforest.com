@@ -3,7 +3,7 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { MARKER_IMAGE_PREFIX, createMarkerImage, parseMarkerImageId } from '~/utils/mapMarkers'
-import { formatDistance, haversineKm } from '~/utils/geo'
+import { formatDistance, haversineKm, splitRouteWithRemainder } from '~/utils/geo'
 
 interface Waypoint {
   id: string
@@ -56,6 +56,8 @@ interface Props {
   userLocation?: [number, number] | null
   inspectedRoute?: InspectedRoute | null
   selectedLegIndex?: number | null
+  hoveredWaypointId?: string | null
+  hoveredLegIndex?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -65,7 +67,9 @@ const props = withDefaults(defineProps<Props>(), {
   trailhead: null,
   userLocation: null,
   inspectedRoute: null,
-  selectedLegIndex: null
+  selectedLegIndex: null,
+  hoveredWaypointId: null,
+  hoveredLegIndex: null
 })
 
 const emit = defineEmits<{
@@ -140,61 +144,123 @@ function buildWaypointsGeoJSON(waypoints: Waypoint[], selectedId?: string, inspe
   }
 }
 
-function buildInspectedRouteLineGeoJSON(route?: InspectedRoute | null, selectedLegIndex?: number | null) {
-  if (!route || !route.waypoints || route.waypoints.length < 2) return EMPTY_FC
+function buildInspectedRouteLineGeoJSON(
+  route?: InspectedRoute | null,
+  selectedLegIndex?: number | null,
+  hoveredLegIndex?: number | null
+) {
+  if (!route) return EMPTY_FC
 
-  const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
-  const features: any[] = []
+  const hasGpx = Array.isArray(route.geometry) && route.geometry.length >= 2
+  const hasWaypoints = Array.isArray(route.waypoints) && route.waypoints.length >= 1
 
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const isSelected = selectedLegIndex === i
-    const hasLegSelection = selectedLegIndex !== null && selectedLegIndex !== undefined
-    const opacity = hasLegSelection ? (isSelected ? 1.0 : 0.25) : 0.85
-    const lineWidth = isSelected ? 4.5 : 2.5
-    const casingWidth = isSelected ? 7 : 4.5
+  if (hasWaypoints && (route.waypoints.length >= 2 || hasGpx)) {
+    const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
+    const { legs: legGeometries, prefix, suffix } = splitRouteWithRemainder(route.geometry, sorted)
+    const effectiveLegIdx =
+      hoveredLegIndex !== null && hoveredLegIndex !== undefined ? hoveredLegIndex : selectedLegIndex
+    const hasLegSelection = effectiveLegIdx !== null && effectiveLegIdx !== undefined
+    const features: any[] = []
 
-    features.push({
-      type: 'Feature' as const,
-      properties: {
-        legIndex: i,
-        letter: String.fromCharCode(65 + i),
-        isSelected,
-        opacity,
-        lineWidth,
-        casingWidth
-      },
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: [
-          [sorted[i].lng, sorted[i].lat],
-          [sorted[i + 1].lng, sorted[i + 1].lat]
-        ]
-      }
-    })
+    const pushLegSegment = (coords: Array<[number, number]> | null, legIdx: number, letter: string) => {
+      if (!coords || coords.length < 2) return
+      const isSelected = hasLegSelection && effectiveLegIdx === legIdx
+      const opacity = hasLegSelection ? (isSelected ? 1.0 : 0.25) : 0.85
+      const lineWidth = isSelected ? (hasGpx ? 5.5 : 4.5) : (hasGpx ? 3.5 : 2.5)
+      const casingWidth = isSelected ? (hasGpx ? 8.5 : 7) : (hasGpx ? 5.5 : 4.5)
+
+      features.push({
+        type: 'Feature' as const,
+        properties: {
+          legIndex: legIdx,
+          letter,
+          isSelected,
+          opacity,
+          lineWidth,
+          casingWidth
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: coords
+        }
+      })
+    }
+
+    pushLegSegment(prefix, -1, 'START')
+
+    for (let i = 0; i < legGeometries.length; i++) {
+      pushLegSegment(legGeometries[i], i, String.fromCharCode(65 + i))
+    }
+
+    const suffixIdx = sorted.length - 1
+    pushLegSegment(suffix, suffixIdx, String.fromCharCode(65 + suffixIdx))
+
+    // Place the selected/hovered leg last so its full-opacity casing and stroke render cleanly above adjacent dimmed leg endpoints
+    if (hasLegSelection) {
+      features.sort((a, b) => (a.properties.isSelected ? 1 : 0) - (b.properties.isSelected ? 1 : 0))
+    }
+
+    return {
+      type: 'FeatureCollection' as const,
+      features
+    }
   }
 
-  return {
-    type: 'FeatureCollection' as const,
-    features
+  // Fallback for single-location dispatch with a GPX track
+  if (hasGpx) {
+    return {
+      type: 'FeatureCollection' as const,
+      features: [
+        {
+          type: 'Feature' as const,
+          properties: {
+            legIndex: -1,
+            letter: '',
+            isSelected: false,
+            opacity: 0.85,
+            lineWidth: 3.5,
+            casingWidth: 5.5
+          },
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: route.geometry!
+          }
+        }
+      ]
+    }
   }
+
+  return EMPTY_FC
 }
 
 function buildInspectedRoutePointsGeoJSON(
   route?: InspectedRoute | null,
   selectedId?: string,
-  selectedLegIndex?: number | null
+  selectedLegIndex?: number | null,
+  hoveredWaypointId?: string | null,
+  hoveredLegIndex?: number | null
 ) {
   if (!route || !route.waypoints || route.waypoints.length === 0) return EMPTY_FC
 
   const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
-  const hasLegSelection = selectedLegIndex !== null && selectedLegIndex !== undefined
+  const effectiveLegIdx =
+    hoveredLegIndex !== null && hoveredLegIndex !== undefined ? hoveredLegIndex : selectedLegIndex
+  const hasLegSelection = effectiveLegIdx !== null && effectiveLegIdx !== undefined
+  const hasWaypointHover = !!hoveredWaypointId
 
   return {
     type: 'FeatureCollection' as const,
     features: sorted.map((wp, idx) => {
-      const isLegEndpoint = hasLegSelection && (idx === selectedLegIndex || idx === selectedLegIndex + 1)
-      const isSelected = wp.id === selectedId || (wp as any).slug === selectedId || isLegEndpoint
-      const opacity = hasLegSelection ? (isLegEndpoint ? 1.0 : 0.35) : 1.0
+      const isHoveredWp = hasWaypointHover && (wp.id === hoveredWaypointId || (wp as any).slug === hoveredWaypointId)
+      const isLegEndpoint = hasLegSelection && (idx === effectiveLegIdx || idx === effectiveLegIdx + 1)
+      const isSelected = wp.id === selectedId || (wp as any).slug === selectedId || isLegEndpoint || isHoveredWp
+      const opacity = isHoveredWp
+        ? 1.0
+        : hasLegSelection
+          ? (isLegEndpoint ? 1.0 : 0.35)
+          : hasWaypointHover
+            ? 0.45
+            : 1.0
 
       return {
         type: 'Feature' as const,
@@ -205,6 +271,7 @@ function buildInspectedRoutePointsGeoJSON(
           orderStr: String(wp.order),
           isSelected,
           isLegEndpoint,
+          isHovered: isHoveredWp,
           opacity
         },
         geometry: {
@@ -776,6 +843,7 @@ onMounted(() => {
 
   map.on('load', () => {
     map?.resize()
+    updateMapLayersData()
     if (pendingFocus) {
       const p = pendingFocus
       pendingFocus = null
@@ -835,8 +903,11 @@ onMounted(() => {
     if (e.originalEvent && e.originalEvent === lastLegClickEvent) return
     lastLegClickEvent = e.originalEvent || null
     const feature = e.features?.[0]
-    if (feature?.properties?.legIndex != null) {
-      emit('select-leg', Number(feature.properties.legIndex))
+    const legIdx = Number(feature?.properties?.legIndex)
+    if (feature?.properties?.legIndex != null && !Number.isNaN(legIdx) && legIdx >= -1) {
+      emit('select-leg', legIdx)
+    } else if (props.selectedLegIndex !== null && props.selectedLegIndex !== undefined) {
+      emit('map-click')
     }
   }
   map.on('click', 'nitf-inspected-route-line', handleLegRouteClick)
@@ -985,8 +1056,26 @@ function setSourceData(id: string, data: any) {
   source?.setData(data)
 }
 
+function updateInspectedRouteHoverData() {
+  if (!map || !map.getSource('nitf-inspected-route-line')) return
+  setSourceData(
+    'nitf-inspected-route-line',
+    buildInspectedRouteLineGeoJSON(props.inspectedRoute, props.selectedLegIndex, props.hoveredLegIndex)
+  )
+  setSourceData(
+    'nitf-inspected-route-points',
+    buildInspectedRoutePointsGeoJSON(
+      props.inspectedRoute,
+      props.selectedId,
+      props.selectedLegIndex,
+      props.hoveredWaypointId,
+      props.hoveredLegIndex
+    )
+  )
+}
+
 function updateMapLayersData() {
-  if (!map) return
+  if (!map || !map.getSource('nitf-waypoints')) return
   if (props.selectedId && props.trailhead && !props.trailhead.trailGeometry) {
     const from = getSelectedCoords()
     if (from) {
@@ -1017,8 +1106,7 @@ function updateMapLayersData() {
   setSourceData('nitf-user-location', buildUserLocationGeoJSON(props.userLocation))
   setSourceData('nitf-trailhead', buildTrailheadGeoJSON(props.trailhead))
   setSourceData('nitf-trailhead-link', buildTrailheadLinkGeoJSON(props.trailhead))
-  setSourceData('nitf-inspected-route-line', buildInspectedRouteLineGeoJSON(props.inspectedRoute, props.selectedLegIndex))
-  setSourceData('nitf-inspected-route-points', buildInspectedRoutePointsGeoJSON(props.inspectedRoute, props.selectedId, props.selectedLegIndex))
+  updateInspectedRouteHoverData()
 }
 
 function resetTransformPaddingIfNeeded() {
@@ -1220,8 +1308,22 @@ watch(() => props.userLocation, () => {
 
 // Watch selection, waypoints, trailhead, inspectedRoute, and selectedLegIndex to refresh the GeoJSON map layers.
 // Camera framing on selection is owned by the parent via `focusOn` (it knows the peek card's size).
-watch([() => props.selectedId, () => props.waypoints, () => props.trailhead, () => props.inspectedRoute, () => props.selectedLegIndex], () => {
+watch([
+  () => props.selectedId,
+  () => props.waypoints,
+  () => props.trailhead,
+  () => props.inspectedRoute,
+  () => props.selectedLegIndex
+], () => {
   updateMapLayersData()
+})
+
+// Fast-path watcher for route breakdown hover states so consecutive hover transitions never wait on unrelated sources
+watch([
+  () => props.hoveredWaypointId,
+  () => props.hoveredLegIndex
+], () => {
+  updateInspectedRouteHoverData()
 })
 </script>
 

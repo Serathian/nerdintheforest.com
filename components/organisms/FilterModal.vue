@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { mockAreas } from '~/data/mockNordicTrail'
 
 export interface FilterState {
   category: string // 'ALL' | 'SHELTER' | 'HEARTH' | 'SPRINGHEAD' | 'VIEWPOINT'
@@ -52,15 +51,19 @@ const categories = [
   { id: 'VIEWPOINT', label: 'Viewpoints', icon: 'visibility' }
 ]
 
-const areas = computed(() => [
-  { id: 'ALL', label: 'All Areas', country: '', icon: 'public' },
-  ...mockAreas.map(a => ({
-    id: a.id,
-    label: a.name,
-    country: a.country,
-    icon: a.country === 'Finland' ? 'terrain' : 'forest'
-  }))
-])
+const { areas: cmsAreas } = useNitfCms()
+
+const areas = computed(() => {
+  return [
+    { id: 'ALL', label: 'All Areas', country: '', icon: 'public' },
+    ...cmsAreas.value.map(a => ({
+      id: a.slug || a.id,
+      label: a.name,
+      country: a.country,
+      icon: a.country === 'Finland' ? 'terrain' : 'forest'
+    }))
+  ]
+})
 
 const visitStatuses: Array<{ id: 'ALL' | 'VISITED' | 'UNVISITED'; label: string; icon: string }> = [
   { id: 'ALL', label: 'All Stops', icon: 'all_inclusive' },

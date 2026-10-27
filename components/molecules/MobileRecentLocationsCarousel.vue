@@ -21,7 +21,7 @@ const emit = defineEmits<{
 <template>
   <div class="recent-locations-container">
     <!-- Horizontal Snapping Card Carousel -->
-    <div v-if="fieldNotes.length > 0" class="locations-carousel">
+    <div v-if="fieldNotes.length > 0" class="locations-carousel scroll-hint-x">
       <RecentCard
         v-for="note in fieldNotes"
         :key="note.id"
@@ -67,7 +67,6 @@ const emit = defineEmits<{
   scroll-padding-left: 16px;
   scroll-padding-right: 16px;
   scroll-snap-type: x mandatory;
-  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -77,10 +76,6 @@ const emit = defineEmits<{
 
 .locations-carousel > :last-child {
   margin-right: 16px;
-}
-
-.locations-carousel::-webkit-scrollbar {
-  display: none;
 }
 
 .empty-state {

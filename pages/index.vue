@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { FilterState } from '~/components/organisms/FilterModal.vue'
 import { calculateMapFocusPadding, measureDrawerTop } from '~/utils/mapViewport'
-import { mockFieldNotes, mockLocations } from '~/data/mockNordicTrail'
+import { splitRouteWithRemainder } from '~/utils/geo'
 
 useHead({
   title: 'Nerd in the Forest — Nordic Cartography & Adventure Atlas',
@@ -24,6 +24,8 @@ const router = useRouter()
 const route = useRoute()
 const activeDispatchInspection = useState<any>('activeDispatchInspection', () => null)
 const selectedLegIndex = ref<number | null>(null)
+const hoveredNoteId = ref<string | null>(null)
+const hoveredLegIndex = ref<number | null>(null)
 const isFilterOpen = ref(false)
 const searchQuery = ref('')
 const activeCategory = ref('ALL')
@@ -40,7 +42,16 @@ const filters = ref<FilterState>({
   amenities: []
 })
 
-const { fieldNotes, mapWaypoints, locations, dispatches, fetchPosts, fetchWaypoints, fetchDispatchBySlug, fetchLocationBySlug } = useNitfCms()
+const { fieldNotes, mapWaypoints, locations, dispatches, fetchAreas, fetchPosts, fetchWaypoints, fetchDispatchBySlug, fetchLocationBySlug } = useNitfCms()
+
+await useAsyncData('nitf-atlas-cms', async () => {
+  await Promise.all([
+    fetchAreas(),
+    fetchWaypoints(),
+    fetchPosts()
+  ])
+  return true
+})
 
 const activeDispatchSlug = computed(() => {
   return (route.query.dispatch as string) || (route.query.story as string) || activeDispatchInspection.value?.slug || ''
@@ -53,6 +64,8 @@ watch(activeDispatchSlug, async (slug, oldSlug) => {
   if (slug !== oldSlug) {
     selectedLegIndex.value = null
     selectedNoteId.value = ''
+    hoveredNoteId.value = null
+    hoveredLegIndex.value = null
   }
   if (!slug) {
     asyncFetchedDispatch.value = null
@@ -102,10 +115,13 @@ watch(activeDispatchSlug, async (slug, oldSlug) => {
 }, { immediate: true })
 
 const activeInspectedDispatch = computed(() => {
-  if (asyncFetchedDispatch.value) return asyncFetchedDispatch.value
   const query = activeDispatchSlug.value
   if (!query) return null
-  return dispatches.value.find(d => d.slug === query || d.id === query) || null
+  // Prefer the canonical dispatch from CMS dispatches store when available (includes trailGeometry)
+  const fromStore = dispatches.value.find(d => d.slug === query || d.id === query)
+  if (fromStore) return fromStore
+  if (asyncFetchedDispatch.value) return asyncFetchedDispatch.value
+  return null
 })
 
 const inspectedWaypoints = computed(() => {
@@ -128,19 +144,6 @@ const inspectedWaypoints = computed(() => {
 
     // 2. Try matching in locations
     const matchedLoc = locations.value.find(l =>
-      String(l.id) === locId ||
-      String(l.slug) === locSlug ||
-      String(l.id) === locSlug ||
-      String(l.slug) === locId
-    )
-
-    // 3. Fallback to mock data if CMS database doesn't have this location
-    const matchedMock = mockFieldNotes.find(n =>
-      String(n.id) === locId ||
-      String(n.slug) === locSlug ||
-      String(n.id) === locSlug ||
-      String(n.slug) === locId
-    ) || mockLocations.find(l =>
       String(l.id) === locId ||
       String(l.slug) === locSlug ||
       String(l.id) === locSlug ||
@@ -175,21 +178,6 @@ const inspectedWaypoints = computed(() => {
         summary: matchedLoc.summary,
         order: idx + 1
       })
-    } else if (matchedMock) {
-      const isLoc = 'name' in matchedMock
-      list.push({
-        id: matchedMock.id,
-        slug: matchedMock.slug || matchedMock.id,
-        title: isLoc ? (matchedMock as any).name : (matchedMock as any).title,
-        elevation: matchedMock.elevation,
-        elevationGain: (matchedMock as any).elevationGain ?? (matchedMock as any).trailhead?.elevationGain,
-        elevationLoss: (matchedMock as any).elevationLoss ?? (matchedMock as any).trailhead?.elevationLoss,
-        category: matchedMock.category,
-        latitude: matchedMock.latitude,
-        longitude: matchedMock.longitude,
-        summary: isLoc ? (matchedMock as any).summary : (matchedMock as any).description,
-        order: idx + 1
-      })
     } else if (typeof locRef === 'object' && locRef !== null) {
       list.push({
         id: String(locRef.id || `loc-${idx}`),
@@ -211,9 +199,12 @@ const inspectedWaypoints = computed(() => {
 
 const inspectedRoute = computed(() => {
   if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return null
+  const d = activeInspectedDispatch.value
+  const geom: Array<[number, number]> | undefined = d.trailGeometry || d.trail_geometry
   return {
-    dispatchId: activeInspectedDispatch.value.id,
-    title: activeInspectedDispatch.value.title,
+    dispatchId: d.id,
+    title: d.title,
+    geometry: geom && Array.isArray(geom) && geom.length > 0 ? geom : undefined,
     waypoints: inspectedWaypoints.value
       .filter(w => w.latitude != null && w.longitude != null)
       .map(w => ({
@@ -262,8 +253,8 @@ async function focusInspectedRoute() {
 }
 
 async function focusLeg(index: number) {
-  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length < 2) return
-  if (index < 0 || index >= inspectedWaypoints.value.length - 1) return
+  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length < 1) return
+  if (index < -1 || index > inspectedWaypoints.value.length - 1) return
 
   selectedLegIndex.value = index
   selectedNoteId.value = ''
@@ -276,13 +267,43 @@ async function focusLeg(index: number) {
 
   if (reqId !== focusRequestId || selectedLegIndex.value !== index) return
 
-  const from = inspectedWaypoints.value[index]
-  const to = inspectedWaypoints.value[index + 1]
-  if (from && to && from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
-    const points: Array<[number, number]> = [
-      [from.longitude, from.latitude],
-      [to.longitude, to.latitude]
-    ]
+  const points: Array<[number, number]> = []
+  const { legs: legGeoms, prefix, suffix } = splitRouteWithRemainder(
+    inspectedRoute.value?.geometry,
+    inspectedRoute.value?.waypoints || []
+  )
+
+  if (index === -1) {
+    if (prefix && prefix.length >= 2) {
+      points.push(...prefix)
+    }
+    const firstWp = inspectedWaypoints.value[0]
+    if (firstWp?.longitude != null && firstWp?.latitude != null) {
+      points.push([firstWp.longitude, firstWp.latitude])
+    }
+  } else if (index === inspectedWaypoints.value.length - 1) {
+    const lastWp = inspectedWaypoints.value[index]
+    if (lastWp?.longitude != null && lastWp?.latitude != null) {
+      points.push([lastWp.longitude, lastWp.latitude])
+    }
+    if (suffix && suffix.length >= 2) {
+      points.push(...suffix)
+    }
+  } else {
+    const from = inspectedWaypoints.value[index]
+    const to = inspectedWaypoints.value[index + 1]
+    if (from?.longitude != null && from?.latitude != null) {
+      points.push([from.longitude, from.latitude])
+    }
+    if (to?.longitude != null && to?.latitude != null) {
+      points.push([to.longitude, to.latitude])
+    }
+    if (legGeoms[index]?.length) {
+      points.push(...legGeoms[index])
+    }
+  }
+
+  if (points.length >= 2) {
     if (!mapRef.value) {
       setTimeout(() => {
         if (reqId === focusRequestId && selectedLegIndex.value === index) {
@@ -349,6 +370,8 @@ function handleExitInspection() {
   activeDispatchInspection.value = null
   selectedNoteId.value = ''
   selectedLegIndex.value = null
+  hoveredNoteId.value = null
+  hoveredLegIndex.value = null
   const query = { ...route.query }
   delete query.dispatch
   delete query.story
@@ -715,6 +738,10 @@ watch(selectedNoteId, (id) => {
 function handleSelectNote(id: string) {
   selectedLegIndex.value = null
   if (selectedNoteId.value === id) {
+    if (activeInspectedDispatch.value) {
+      selectedNoteId.value = ''
+      return
+    }
     // Same location re-tapped: the watcher won't fire, so re-frame explicitly
     focusSelection()
     return
@@ -870,6 +897,7 @@ function showNotification(msg: string) {
         <MapCanvas ref="mapRef" :waypoints="filteredWaypoints" :selected-id="selectedNoteId"
           :trailhead="selectedTrailhead" :active-layer="activeLayer" :user-location="userLocation"
           :inspected-route="inspectedRoute" :selected-leg-index="selectedLegIndex"
+          :hovered-waypoint-id="hoveredNoteId" :hovered-leg-index="hoveredLegIndex"
           @select-waypoint="handleSelectNote" @select-cluster="handleSelectCluster"
           @select-leg="handleSelectLeg" @map-click="handleMapClick"
           @ready="handleMapReady" />
@@ -894,6 +922,7 @@ function showNotification(msg: string) {
       :active-dispatch="activeInspectedDispatch" :inspected-waypoints="inspectedWaypoints"
       :selected-leg-index="selectedLegIndex"
       @select-note="handleSelectNote" @select-leg="handleSelectLeg" @clear-leg="handleClearLeg"
+      @hover-note="(id) => hoveredNoteId = id" @hover-leg="(idx) => hoveredLegIndex = idx"
       @clear-selected="handleClearSelected" @read-story="handleReadStory" @navigate="(p) => {
         selectedNoteId = p.id
         focusSelection()

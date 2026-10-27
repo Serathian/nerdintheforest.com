@@ -2,22 +2,22 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { calculateReadTime, formatDispatchDateRange } from '~/utils/formatters'
-import { haversineKm, formatDistance } from '~/utils/geo'
-import { mockFieldNotes, mockLocations } from '~/data/mockNordicTrail'
-import type { Dispatch, Location } from '~/types/models'
+import { haversineKm, formatDistance, polylineDistanceKm, splitRouteWithRemainder } from '~/utils/geo'
+import type { Dispatch, Location, Loadout } from '~/types/models'
 
 const route = useRoute()
 const router = useRouter()
 const slug = computed(() => String(route.params.slug || ''))
 
-const { dispatches, locations, fetchLocationBySlug, fetchDispatchBySlug, fetchPosts, fetchWaypoints } = useNitfCms()
+const { dispatches, locations, loadouts, fetchLocationBySlug, fetchDispatchBySlug, fetchPosts, fetchWaypoints, fetchLoadouts } = useNitfCms()
 
 const { data: asyncDispatch } = await useAsyncData(
   `dispatch-article-${slug.value}`,
   async () => {
     await Promise.all([
       fetchPosts(),
-      fetchWaypoints()
+      fetchWaypoints(),
+      fetchLoadouts()
     ])
     return await fetchDispatchBySlug(slug.value)
   },
@@ -28,6 +28,19 @@ const currentDispatch = computed<Dispatch | null>(() => {
   return asyncDispatch.value || dispatches.value.find(d => d.slug === slug.value || d.id === slug.value) || null
 })
 
+const linkedLoadout = computed<Loadout | null>(() => {
+  const lRef = currentDispatch.value?.loadout
+  if (!lRef) return null
+  if (typeof lRef === 'object' && lRef !== null) {
+    return lRef as Loadout
+  }
+  const refStr = String(lRef)
+  return (
+    loadouts.value.find(l => l.slug === refStr || String(l.id) === refStr) ||
+    null
+  )
+})
+
 // Resolve linked locations visited on this outing
 const linkedLocations = computed<Location[]>(() => {
   if (!currentDispatch.value || !Array.isArray(currentDispatch.value.locations)) return []
@@ -35,27 +48,24 @@ const linkedLocations = computed<Location[]>(() => {
 
   for (const locRef of currentDispatch.value.locations) {
     const locId = typeof locRef === 'object' && locRef !== null ? (locRef.slug || locRef.id) : String(locRef)
-    const found =
-      locations.value.find(l => l.slug === locId || l.id === locId) ||
-      mockLocations.find(l => l.slug === locId || l.id === locId)
+    const found = locations.value.find(
+      l => l.slug === locId || l.id === locId || (locRef?.cmsId && l.id === locRef.cmsId)
+    )
     if (found) {
       result.push(found)
-    } else {
-      const mockNote = mockFieldNotes.find(n => n.slug === locId || n.id === locId)
-      if (mockNote) {
-        result.push({
-          id: mockNote.id,
-          slug: mockNote.slug,
-          name: mockNote.title,
-          area: mockNote.areaId,
-          category: mockNote.category.toLowerCase() as any,
-          latitude: mockNote.latitude,
-          longitude: mockNote.longitude,
-          elevation: mockNote.elevation,
-          summary: mockNote.description,
-          amenities: []
-        })
-      }
+    } else if (typeof locRef === 'object' && locRef !== null && (locRef.name || locRef.title)) {
+      result.push({
+        id: String(locRef.slug || locRef.id),
+        slug: String(locRef.slug || locRef.id),
+        name: locRef.name || locRef.title,
+        area: locRef.area || 'pirkanmaa',
+        category: (locRef.category || 'shelter').toLowerCase() as any,
+        latitude: locRef.latitude ?? 61.4,
+        longitude: locRef.longitude ?? 23.9,
+        elevation: locRef.elevation,
+        summary: locRef.summary || '',
+        amenities: []
+      })
     }
   }
 
@@ -69,15 +79,42 @@ interface DispatchLegItem {
   distanceFormatted: string
 }
 
+const dispatchRouteSplit = computed(() => {
+  const rawGeom: Array<[number, number]> | undefined =
+    currentDispatch.value?.trailGeometry || (currentDispatch.value as any)?.trail_geometry
+  const hasGpx = Array.isArray(rawGeom) && rawGeom.length >= 2
+  const wpCoords = linkedLocations.value.map(l => ({ lng: l.longitude ?? 0, lat: l.latitude ?? 0 }))
+  const split = splitRouteWithRemainder(hasGpx ? rawGeom : undefined, wpCoords)
+  return { hasGpx, ...split }
+})
+
+const dispatchPrefixLeg = computed<DispatchLegItem | null>(() => {
+  if (linkedLocations.value.length === 0) return null
+  const { hasGpx, prefix } = dispatchRouteSplit.value
+  if (!hasGpx || !prefix || prefix.length < 2) return null
+  const distKm = polylineDistanceKm(prefix)
+  if (distKm < 0.05) return null
+  return {
+    index: -1,
+    letter: 'START',
+    distanceKm: distKm,
+    distanceFormatted: formatDistance(distKm)
+  }
+})
+
 const dispatchLegs = computed<DispatchLegItem[]>(() => {
   const list: DispatchLegItem[] = []
   if (linkedLocations.value.length < 2) return list
+
+  const { hasGpx, legs: splitLegs } = dispatchRouteSplit.value
 
   for (let i = 0; i < linkedLocations.value.length - 1; i++) {
     const from = linkedLocations.value[i]
     const to = linkedLocations.value[i + 1]
     let distKm = 0
-    if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
+    if (hasGpx && splitLegs[i] && splitLegs[i].length >= 2) {
+      distKm = polylineDistanceKm(splitLegs[i])
+    } else if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
       distKm = haversineKm([from.longitude, from.latitude], [to.longitude, to.latitude])
     }
     list.push({
@@ -88,6 +125,21 @@ const dispatchLegs = computed<DispatchLegItem[]>(() => {
     })
   }
   return list
+})
+
+const dispatchSuffixLeg = computed<DispatchLegItem | null>(() => {
+  if (linkedLocations.value.length === 0) return null
+  const { hasGpx, suffix } = dispatchRouteSplit.value
+  if (!hasGpx || !suffix || suffix.length < 2) return null
+  const distKm = polylineDistanceKm(suffix)
+  if (distKm < 0.05) return null
+  const lastIdx = linkedLocations.value.length - 1
+  return {
+    index: lastIdx,
+    letter: String.fromCharCode(65 + lastIdx),
+    distanceKm: distKm,
+    distanceFormatted: formatDistance(distKm)
+  }
 })
 
 function getCategoryIcon(cat?: string): string {
@@ -302,7 +354,7 @@ useHead({
             {{ currentDispatch.title }}
           </h1>
 
-          <!-- Dispatch Entry Field Telemetry (Expedition Date Span & Weather) -->
+          <!-- Dispatch Entry Field Telemetry (Expedition Date Span, Weather & Carried Loadout) -->
           <div class="dispatch-entry-badges font-mono">
             <span v-if="expeditionDateSpanFormatted" class="entry-badge expedition-dates" title="Expedition Date Span">
               <span class="material-symbols-outlined badge-icon">date_range</span>
@@ -312,6 +364,16 @@ useHead({
               <span class="material-symbols-outlined badge-icon">partly_cloudy_day</span>
               <span>{{ currentDispatch.weather }}</span>
             </span>
+            <NuxtLink
+              v-if="linkedLoadout"
+              :to="`/gear?tab=gear&loadout=${linkedLoadout.slug || linkedLoadout.id}`"
+              class="entry-badge loadout-carried"
+              :title="`Inspect ${linkedLoadout.title} loadout in Gear Ledger`"
+            >
+              <span class="material-symbols-outlined badge-icon">backpack</span>
+              <span>LOADOUT: {{ linkedLoadout.title.toUpperCase() }}</span>
+              <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
+            </NuxtLink>
           </div>
 
           <p class="article-lead font-serif">
@@ -340,6 +402,23 @@ useHead({
             <!-- Sequential Timeline Stepper Track (matches MobileDispatchInspectionPeek) -->
             <div class="timeline-stepper-track scrollbar-none">
               <div class="timeline-row">
+                <div
+                  v-if="dispatchPrefixLeg"
+                  class="timeline-leg-connector is-prefix font-mono"
+                  role="button"
+                  tabindex="0"
+                  :title="`Inspect Start Leg (${dispatchPrefixLeg.distanceFormatted}) on Atlas Map`"
+                  @click="openInAtlas"
+                  @keydown.enter.prevent="openInAtlas"
+                  @keydown.space.prevent="openInAtlas"
+                >
+                  <span class="leg-terminal-dot start" />
+                  <span class="leg-connector-line" />
+                  <span class="leg-dist-pill">
+                    <span class="leg-dist-text">{{ dispatchPrefixLeg.distanceFormatted }}</span>
+                  </span>
+                </div>
+
                 <template v-for="(loc, idx) in linkedLocations" :key="loc.id">
                   <!-- Waypoint Chip -->
                   <NuxtLink
@@ -382,6 +461,23 @@ useHead({
                     </span>
                   </div>
                 </template>
+
+                <div
+                  v-if="dispatchSuffixLeg"
+                  class="timeline-leg-connector is-suffix font-mono"
+                  role="button"
+                  tabindex="0"
+                  :title="`Inspect Finish Leg (${dispatchSuffixLeg.distanceFormatted}) on Atlas Map`"
+                  @click="openInAtlas"
+                  @keydown.enter.prevent="openInAtlas"
+                  @keydown.space.prevent="openInAtlas"
+                >
+                  <span class="leg-connector-line" />
+                  <span class="leg-dist-pill">
+                    <span class="leg-dist-text">{{ dispatchSuffixLeg.distanceFormatted }}</span>
+                  </span>
+                  <span class="leg-terminal-dot end" />
+                </div>
               </div>
             </div>
           </div>
@@ -768,6 +864,25 @@ useHead({
   color: var(--color-secondary, #d9531e);
 }
 
+.entry-badge.loadout-carried {
+  background-color: rgba(217, 83, 30, 0.08);
+  border: 1px solid rgba(217, 83, 30, 0.35);
+  color: var(--color-primary, #1b2e24);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.entry-badge.loadout-carried:hover {
+  background-color: rgba(217, 83, 30, 0.15);
+  border-color: var(--color-secondary, #d9531e);
+  color: var(--color-secondary, #d9531e);
+}
+
+.entry-badge.loadout-carried .badge-icon {
+  color: var(--color-secondary, #d9531e);
+}
+
 .entry-badge.weather-cond {
   background-color: rgba(217, 83, 30, 0.1);
   border: 1px solid rgba(217, 83, 30, 0.35);
@@ -1010,6 +1125,40 @@ useHead({
 
 .timeline-leg-connector:hover .leg-dist-text {
   color: var(--color-secondary, #d9531e);
+}
+
+.timeline-leg-connector.is-prefix {
+  padding-left: 10px;
+}
+
+.timeline-leg-connector.is-suffix {
+  padding-right: 10px;
+}
+
+.leg-terminal-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-outline-variant, #c2c8c2);
+  border: 1.5px solid var(--color-surface-container-low, #f8f3e7);
+  z-index: 4;
+  transition: all 0.16s ease;
+}
+
+.leg-terminal-dot.start {
+  left: 0;
+}
+
+.leg-terminal-dot.end {
+  right: 0;
+}
+
+.timeline-leg-connector:hover .leg-terminal-dot {
+  background-color: var(--color-secondary, #d9531e);
+  transform: translateY(-50%) scale(1.15);
 }
 
 .article-divider {

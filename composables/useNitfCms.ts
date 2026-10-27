@@ -9,7 +9,33 @@ import {
   type MockMapWaypoint,
   type AmenityItem
 } from '../data/mockNordicTrail'
-import type { Location, Dispatch, Area, LocationAmenity, LocationCategory } from '../types/models'
+import {
+  mockGearItems,
+  mockGearReviews,
+  mockLoadouts,
+  mockGearInsights,
+  mockLoadoutKits,
+  convertGearItemsToCategories,
+  convertLoadoutToKit,
+  convertReviewToInsight,
+  type GearInsight,
+  type LoadoutKit,
+  type LoadoutCategory
+} from '../data/mockGearData'
+import type {
+  Location,
+  Dispatch,
+  Area,
+  LocationAmenity,
+  LocationCategory,
+  GearItem,
+  GearReview,
+  Loadout,
+  GearCategory,
+  GearReviewTopic,
+  LoadoutSeason,
+  LoadoutItemStatus
+} from '../types/models'
 import { getLocationVisits, getAmenityMeta, calculateReadTime, getLocationMediaArchive } from '../utils/formatters'
 
 export interface CmsNitfPost {
@@ -104,12 +130,45 @@ export function transformPostToFieldNote(post: CmsNitfPost, index: number): Tran
 }
 
 /**
+ * Extracts plain-text paragraphs from Payload Lexical richText JSON, string arrays, or strings
+ */
+export function extractRichTextParagraphs(rawContent: any, fallbackText?: string): string[] {
+  if (!rawContent) {
+    return fallbackText ? [fallbackText] : []
+  }
+  if (Array.isArray(rawContent)) {
+    const arr = rawContent.map(c => (typeof c === 'string' ? c : (c?.text || ''))).filter(Boolean)
+    return arr.length > 0 ? arr : (fallbackText ? [fallbackText] : [])
+  }
+  if (typeof rawContent === 'string') {
+    return [rawContent]
+  }
+  if (typeof rawContent === 'object' && rawContent.root && Array.isArray(rawContent.root.children)) {
+    const extractTextFromNode = (node: any): string => {
+      if (!node) return ''
+      if (typeof node.text === 'string') return node.text
+      if (Array.isArray(node.children)) {
+        return node.children.map(extractTextFromNode).join('')
+      }
+      return ''
+    }
+    const paragraphs = rawContent.root.children
+      .map((block: any) => extractTextFromNode(block).trim())
+      .filter(Boolean)
+    if (paragraphs.length > 0) return paragraphs
+  }
+  return fallbackText ? [fallbackText] : []
+}
+
+/**
  * Transforms a raw Payload CMS Area doc into the client Area interface
  */
 export function transformCmsArea(doc: any): Area {
   const center: [number, number] = Array.isArray(doc.bounds?.center) && doc.bounds.center.length === 2
     ? [Number(doc.bounds.center[0]), Number(doc.bounds.center[1])]
-    : [23.85, 61.85]
+    : (doc.center_longitude != null && doc.center_latitude != null)
+      ? [Number(doc.center_longitude), Number(doc.center_latitude)]
+      : [23.85, 61.85]
 
   return {
     id: doc.slug || String(doc.id),
@@ -118,7 +177,7 @@ export function transformCmsArea(doc: any): Area {
     country: doc.country || 'Finland',
     description: doc.description || '',
     center,
-    zoom: doc.bounds?.zoom ?? 10,
+    zoom: doc.default_zoom ?? doc.bounds?.zoom ?? 10,
     heroImage: doc.hero_image?.url ? {
       id: String(doc.hero_image.id || 'hero'),
       url: doc.hero_image.url,
@@ -135,20 +194,15 @@ export function transformCmsLocation(doc: any): Location {
     ? (doc.area.slug || String(doc.area.id))
     : String(doc.area || '')
 
-  const docSlug = doc.slug || String(doc.id)
-  const matchedMockNote = mockFieldNotes.find(
-    n => n.slug === docSlug || n.id === docSlug || n.id === String(doc.id)
-  )
   const resolvedTrailGeometry: Array<[number, number]> | undefined =
     doc.trail_geometry ||
     doc.trailGeometry ||
     doc.trailhead?.trail_geometry ||
-    doc.trailhead?.trailGeometry ||
-    matchedMockNote?.trailhead?.trailGeometry
+    doc.trailhead?.trailGeometry
 
   const cat = (doc.category || 'shelter') as LocationCategory
   const amenitiesArr: LocationAmenity[] = Array.isArray(doc.amenities) ? doc.amenities : []
-  const hasParking = amenitiesArr.includes('parking') || Boolean(doc.has_parking || doc.hasParking || matchedMockNote?.hasParking)
+  const hasParking = amenitiesArr.includes('parking') || Boolean(doc.has_parking || doc.hasParking)
 
   let trailheadLoc: Location | undefined = undefined
   if (doc.trailhead && typeof doc.trailhead === 'object') {
@@ -165,22 +219,6 @@ export function transformCmsLocation(doc: any): Location {
       hasParking: true,
       elevationGain: doc.elevation_gain ?? doc.trailhead.elevation_gain,
       elevationLoss: doc.elevation_loss ?? doc.trailhead.elevation_loss,
-      trailGeometry: resolvedTrailGeometry
-    }
-  } else if (!doc.trailhead && matchedMockNote?.trailhead) {
-    trailheadLoc = {
-      id: `th-${docSlug}`,
-      slug: `${docSlug}-trailhead`,
-      name: matchedMockNote.trailhead.name,
-      area: areaId,
-      category: 'trailhead',
-      latitude: matchedMockNote.trailhead.latitude,
-      longitude: matchedMockNote.trailhead.longitude,
-      summary: `Trailhead parking for ${doc.name || matchedMockNote.title}`,
-      amenities: ['parking'],
-      hasParking: true,
-      elevationGain: doc.elevation_gain ?? matchedMockNote.trailhead.elevationGain,
-      elevationLoss: doc.elevation_loss ?? matchedMockNote.trailhead.elevationLoss,
       trailGeometry: resolvedTrailGeometry
     }
   } else if (!doc.trailhead && hasParking && cat !== 'trailhead') {
@@ -223,13 +261,13 @@ export function transformCmsLocation(doc: any): Location {
         ? Number(doc.shelter_capacity)
         : doc.shelterCapacity != null
           ? Number(doc.shelterCapacity)
-          : (matchedMockNote?.shelterCapacity ?? defaultShelterCap),
+          : defaultShelterCap,
     tentSpaces:
       doc.tent_spaces != null
         ? Number(doc.tent_spaces)
         : doc.tentSpaces != null
           ? Number(doc.tentSpaces)
-          : (matchedMockNote?.tentSpaces ?? defaultTentSpaces),
+          : defaultTentSpaces,
     hasParking,
     summary: doc.summary || '',
     amenities: amenitiesArr,
@@ -254,14 +292,22 @@ export function transformCmsDispatch(doc: any): Dispatch {
   if (Array.isArray(doc.locations)) {
     locationsList = doc.locations.map((l: any) => {
       if (typeof l === 'object' && l !== null) {
+        const locSlug = l.slug || String(l.id)
+        const locArea = typeof l.area === 'object' && l.area !== null
+          ? (l.area.name || l.area.slug || String(l.area.id))
+          : (l.area ? String(l.area) : undefined)
         return {
-          id: String(l.id),
-          slug: l.slug || String(l.id),
+          id: locSlug,
+          cmsId: String(l.id),
+          slug: locSlug,
           name: l.name || l.title || 'Waypoint',
           title: l.name || l.title || 'Waypoint',
+          area: locArea,
           latitude: l.latitude != null ? Number(l.latitude) : undefined,
           longitude: l.longitude != null ? Number(l.longitude) : undefined,
           elevation: l.elevation != null ? Number(l.elevation) : undefined,
+          elevationGain: l.elevation_gain != null ? Number(l.elevation_gain) : undefined,
+          elevationLoss: l.elevation_loss != null ? Number(l.elevation_loss) : undefined,
           category: l.category,
           summary: l.summary || ''
         }
@@ -271,7 +317,8 @@ export function transformCmsDispatch(doc: any): Dispatch {
   } else if (doc.location) {
     const single = typeof doc.location === 'object' && doc.location !== null
       ? {
-          id: String(doc.location.id),
+          id: doc.location.slug || String(doc.location.id),
+          cmsId: String(doc.location.id),
           slug: doc.location.slug || String(doc.location.id),
           name: doc.location.name || doc.location.title || 'Waypoint',
           title: doc.location.name || doc.location.title || 'Waypoint',
@@ -299,35 +346,40 @@ export function transformCmsDispatch(doc: any): Dispatch {
       })
     : []
 
-  const rawContent = doc.content
-  let contentList: string[] = []
-  if (Array.isArray(rawContent)) {
-    contentList = rawContent.map(c => typeof c === 'string' ? c : (c?.text || ''))
-  } else if (typeof rawContent === 'string') {
-    contentList = [rawContent]
-  } else if (doc.excerpt) {
-    contentList = [doc.excerpt]
-  }
+  const contentList = extractRichTextParagraphs(doc.content, doc.excerpt)
 
   const slugStr = doc.slug || String(doc.id)
-  const matchedMockDispatch = mockDispatches.find(
-    d => d.slug === slugStr || d.id === slugStr || d.id === String(doc.id)
-  )
+
+  let resolvedLoadout: any = undefined
+  if (typeof doc.loadout === 'object' && doc.loadout !== null) {
+    resolvedLoadout = transformCmsLoadout(doc.loadout)
+  } else if (doc.loadout != null) {
+    resolvedLoadout = String(doc.loadout)
+  }
+
+  const resolvedTrailGeometry: Array<[number, number]> | undefined =
+    doc.trail_geometry || doc.trailGeometry
 
   return {
     id: slugStr,
     slug: slugStr,
     title: doc.title || 'Field Dispatch',
     publishedAt: doc.published_at || doc.createdAt || new Date().toISOString(),
-    startDate: doc.start_date || doc.startDate || matchedMockDispatch?.startDate || doc.published_at || doc.createdAt,
-    endDate: doc.end_date || doc.endDate || matchedMockDispatch?.endDate,
+    startDate: doc.start_date || doc.startDate || doc.published_at || doc.createdAt,
+    endDate: doc.end_date || doc.endDate,
     status: doc.status || 'published',
     locations: locationsList,
+    loadout: resolvedLoadout,
     gallery: galleryList,
     excerpt: doc.excerpt || '',
     weather: doc.weather || '4°C • MIST',
     heroImage: doc.hero_image?.url || doc.hero_image,
-    content: contentList
+    content: contentList,
+    trailGeometry: resolvedTrailGeometry,
+    distanceKm: doc.distance_km != null ? Number(doc.distance_km) : (doc.distanceKm != null ? Number(doc.distanceKm) : undefined),
+    elevationGainM: doc.elevation_gain_m != null ? Number(doc.elevation_gain_m) : (doc.elevationGainM != null ? Number(doc.elevationGainM) : undefined),
+    elevationLossM: doc.elevation_loss_m != null ? Number(doc.elevation_loss_m) : (doc.elevationLossM != null ? Number(doc.elevationLossM) : undefined),
+    durationHours: doc.duration_hours != null ? Number(doc.duration_hours) : (doc.durationHours != null ? Number(doc.durationHours) : undefined)
   }
 }
 
@@ -383,7 +435,7 @@ export function transformLocationToFieldNote(
     date: latestDispatch ? latestDispatch.publishedAt : 'OCT 03, 2026 // UNVISITED',
     readTime: latestDispatch ? calculateReadTime(latestDispatch.content) : 'NO LOG',
     weather: latestDispatch?.weather || 'UNSURVEYED',
-    heroImage: loc.coverImage?.url || 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1200&q=80',
+    heroImage: loc.coverImage?.url || '',
     content: loc.summary ? [loc.summary] : ['Surveyed backcountry location.'],
     gallery: getLocationMediaArchive(loc, dispatches).map(m => ({ url: m.url, caption: m.caption || m.alt })),
     dispatches: linked.map(d => ({
@@ -415,6 +467,118 @@ export function transformLocationToFieldNote(
 }
 
 /**
+ * Transforms a raw Payload CMS GearItem doc into the client GearItem interface
+ */
+export function transformCmsGearItem(doc: any): GearItem {
+  return {
+    id: String(doc.id || doc.slug || ''),
+    name: doc.name || 'Backcountry Equipment',
+    brand: doc.brand || 'Field Gear',
+    category: (doc.category || 'shelter_sleep') as GearCategory,
+    weightGrams: Number(doc.weight_grams ?? doc.weightGrams ?? 0),
+    specNote: doc.spec_note || doc.specNote || undefined,
+    notes: doc.notes || undefined,
+    image: doc.image?.url || doc.image || undefined,
+    productUrl: doc.product_url || doc.productUrl || undefined
+  }
+}
+
+/**
+ * Transforms a raw Payload CMS GearReview doc into the client GearReview interface
+ */
+export function transformCmsGearReview(doc: any, knownItems: GearItem[] = []): GearReview {
+  let resolvedItem: GearItem | string = ''
+  if (typeof doc.gear_item === 'object' && doc.gear_item !== null) {
+    resolvedItem = transformCmsGearItem(doc.gear_item)
+  } else if (typeof doc.gearItem === 'object' && doc.gearItem !== null) {
+    resolvedItem = transformCmsGearItem(doc.gearItem)
+  } else {
+    const rawId = String(doc.gear_item || doc.gearItem || '')
+    resolvedItem = knownItems.find(i => i.id === rawId) || rawId
+  }
+
+  const takeaways: string[] = Array.isArray(doc.key_takeaways)
+    ? doc.key_takeaways.map((t: any) => typeof t === 'string' ? t : (t?.takeaway || '')).filter(Boolean)
+    : Array.isArray(doc.keyTakeaways)
+      ? doc.keyTakeaways
+      : []
+
+  const contentList = extractRichTextParagraphs(doc.content, doc.summary)
+
+  const slugStr = doc.slug || String(doc.id)
+  return {
+    id: slugStr,
+    slug: slugStr,
+    title: doc.title || 'Field Gear Review',
+    gearItem: resolvedItem,
+    topic: (doc.topic || 'durability') as GearReviewTopic,
+    publishedAt: doc.published_at || doc.publishedAt || doc.createdAt || new Date().toISOString().slice(0, 10),
+    durationTested: doc.duration_tested || doc.durationTested || 'Field Tested',
+    summary: doc.summary || '',
+    verdict: doc.verdict || '',
+    keyTakeaways: takeaways,
+    heroImage: doc.hero_image?.url || doc.hero_image || doc.heroImage,
+    content: contentList
+  }
+}
+
+/**
+ * Transforms a raw Payload CMS Loadout doc into the client Loadout interface
+ */
+export function transformCmsLoadout(doc: any, knownItems: GearItem[] = []): Loadout {
+  const entries = Array.isArray(doc.items)
+    ? doc.items.map((entry: any) => {
+        let resolvedItem: GearItem | string = ''
+        if (typeof entry.item === 'object' && entry.item !== null) {
+          resolvedItem = transformCmsGearItem(entry.item)
+        } else {
+          const rawId = String(entry.item || '')
+          resolvedItem = knownItems.find(i => i.id === rawId) || rawId
+        }
+        return {
+          item: resolvedItem,
+          status: (entry.status || 'packed') as LoadoutItemStatus,
+          customNote: entry.custom_note || entry.customNote || undefined
+        }
+      })
+    : []
+
+  const rawDispatches = Array.isArray(doc.dispatches?.docs)
+    ? doc.dispatches.docs
+    : Array.isArray(doc.dispatches)
+      ? doc.dispatches
+      : []
+
+  const dispatchesList = rawDispatches.map((d: any) => {
+    if (typeof d === 'object' && d !== null) {
+      return {
+        id: String(d.id || d.slug),
+        slug: d.slug || String(d.id),
+        title: d.title || 'Field Dispatch',
+        publishedAt: d.published_at || d.publishedAt || d.createdAt,
+        status: d.status || 'published',
+        locations: [],
+        excerpt: d.excerpt || '',
+        content: []
+      }
+    }
+    return String(d)
+  })
+
+  const slugStr = doc.slug || String(doc.id)
+  return {
+    id: slugStr,
+    slug: slugStr,
+    title: doc.title || 'Seasonal Loadout',
+    season: (doc.season || 'autumn') as LoadoutSeason,
+    tempRange: doc.temp_range || doc.tempRange || '0°C',
+    description: doc.description || '',
+    items: entries,
+    dispatches: dispatchesList
+  }
+}
+
+/**
  * Universal safe API fetcher working across Nuxt SSR, Browser, and Vitest test environments
  */
 async function fetchFromCms<T>(endpoint: string, base: string = '/api/cms'): Promise<T> {
@@ -437,16 +601,29 @@ async function fetchFromCms<T>(endpoint: string, base: string = '/api/cms'): Pro
   throw new Error('No fetch implementation available')
 }
 
+function sharedRef<T>(key: string, init: () => T) {
+  try {
+    if (typeof useState === 'function') {
+      return useState<T>(key, init)
+    }
+  } catch {
+    // Outside Nuxt context (e.g. unit tests)
+  }
+  return ref<T>(init()) as any
+}
+
 export function useNitfCms() {
-  const fieldNotes = ref<TransformedFieldNote[]>(
-    mockFieldNotes.filter(n => n.category.toUpperCase() !== 'TRAILHEAD')
-  )
-  const mapWaypoints = ref<TransformedMapWaypoint[]>([...mockMapWaypoints])
-  const locations = ref<Location[]>(
-    mockLocations.filter(l => (l.category || '').toLowerCase() !== 'trailhead')
-  )
-  const dispatches = ref<Dispatch[]>([...mockDispatches])
-  const areas = ref<Area[]>([...mockAreas])
+  const fieldNotes = sharedRef<TransformedFieldNote[]>('nitf-field-notes', () => [])
+  const mapWaypoints = sharedRef<TransformedMapWaypoint[]>('nitf-map-waypoints', () => [])
+  const locations = sharedRef<Location[]>('nitf-locations', () => [])
+  const dispatches = sharedRef<Dispatch[]>('nitf-dispatches', () => [])
+  const areas = sharedRef<Area[]>('nitf-areas', () => [])
+  const gearItems = sharedRef<GearItem[]>('nitf-gear-items', () => [])
+  const gearReviews = sharedRef<GearReview[]>('nitf-gear-reviews', () => [])
+  const loadouts = sharedRef<Loadout[]>('nitf-loadouts', () => [])
+  const gearInsights = sharedRef<GearInsight[]>('nitf-gear-insights', () => [])
+  const loadoutKits = sharedRef<LoadoutKit[]>('nitf-loadout-kits', () => [])
+  const gearCategories = sharedRef<LoadoutCategory[]>('nitf-gear-categories', () => [])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -454,6 +631,9 @@ export function useNitfCms() {
     try {
       // In Nuxt runtime
       const config = useRuntimeConfig()
+      if (typeof window === 'undefined' && config?.cmsApiInternal) {
+        return config.cmsApiInternal
+      }
       return config?.public?.cmsApiBase || '/api/cms'
     } catch {
       return '/api/cms'
@@ -499,12 +679,12 @@ export function useNitfCms() {
     try {
       const base = getApiBase()
       const data = await fetchFromCms<{ docs: any[] }>('/nitf_areas?limit=100', base)
-      if (data && Array.isArray(data.docs) && data.docs.length > 0) {
+      if (data && Array.isArray(data.docs)) {
         areas.value = data.docs.map(transformCmsArea)
         return { docs: areas.value }
       }
     } catch {
-      // Graceful fallback to mock areas
+      // CMS error
     }
     return { docs: areas.value }
   }
@@ -515,7 +695,7 @@ export function useNitfCms() {
     try {
       const base = getApiBase()
       const data = await fetchFromCms<{ docs: any[] }>('/nitf_dispatches?depth=2&limit=100', base)
-      if (data && Array.isArray(data.docs) && data.docs.length > 0) {
+      if (data && Array.isArray(data.docs)) {
         dispatches.value = data.docs.map(transformCmsDispatch)
         rebuildDerivedViews()
         isLoading.value = false
@@ -539,7 +719,7 @@ export function useNitfCms() {
 
       // Fetch locations with populated relationships (depth=2 for trailhead and area)
       const data = await fetchFromCms<{ docs: any[] }>('/nitf_locations?depth=2&limit=100', base)
-      if (data && Array.isArray(data.docs) && data.docs.length > 0) {
+      if (data && Array.isArray(data.docs)) {
         locations.value = data.docs.map(transformCmsLocation)
         rebuildDerivedViews()
         isLoading.value = false
@@ -623,12 +803,91 @@ export function useNitfCms() {
     return { docs: fieldNotes.value }
   }
 
+  function rebuildGearViews() {
+    gearInsights.value = gearReviews.value.map(convertReviewToInsight)
+    loadoutKits.value = loadouts.value.map(l => convertLoadoutToKit(l, gearReviews.value, dispatches.value))
+    gearCategories.value = convertGearItemsToCategories(gearItems.value, gearReviews.value, loadouts.value)
+  }
+
+  async function fetchGearItems(): Promise<{ docs: GearItem[] }> {
+    try {
+      const base = getApiBase()
+      const data = await fetchFromCms<{ docs: any[] }>('/nitf_gear_items?depth=1&limit=200', base)
+      if (data && Array.isArray(data.docs)) {
+        gearItems.value = data.docs.map(transformCmsGearItem)
+        rebuildGearViews()
+        return { docs: gearItems.value }
+      }
+    } catch {
+      // CMS error
+    }
+    return { docs: gearItems.value }
+  }
+
+  async function fetchGearReviews(): Promise<{ docs: GearReview[] }> {
+    try {
+      const base = getApiBase()
+      const data = await fetchFromCms<{ docs: any[] }>('/nitf_gear_reviews?depth=2&limit=100', base)
+      if (data && Array.isArray(data.docs)) {
+        gearReviews.value = data.docs.map(doc => transformCmsGearReview(doc, gearItems.value))
+        rebuildGearViews()
+        return { docs: gearReviews.value }
+      }
+    } catch {
+      // CMS error
+    }
+    return { docs: gearReviews.value }
+  }
+
+  async function fetchLoadouts(): Promise<{ docs: Loadout[] }> {
+    try {
+      const base = getApiBase()
+      const data = await fetchFromCms<{ docs: any[] }>('/nitf_loadouts?depth=2&limit=50', base)
+      if (data && Array.isArray(data.docs)) {
+        loadouts.value = data.docs.map(doc => transformCmsLoadout(doc, gearItems.value))
+        rebuildGearViews()
+        return { docs: loadouts.value }
+      }
+    } catch {
+      // CMS error
+    }
+    return { docs: loadouts.value }
+  }
+
+  async function fetchGear() {
+    isLoading.value = true
+    error.value = null
+    try {
+      await fetchGearItems()
+      await Promise.all([fetchGearReviews(), fetchLoadouts(), fetchPosts()])
+      rebuildGearViews()
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch gear ledger from CMS'
+    } finally {
+      isLoading.value = false
+    }
+    return {
+      gearItems: gearItems.value,
+      gearReviews: gearReviews.value,
+      loadouts: loadouts.value,
+      gearInsights: gearInsights.value,
+      loadoutKits: loadoutKits.value,
+      gearCategories: gearCategories.value
+    }
+  }
+
   return {
     fieldNotes,
     mapWaypoints,
     locations,
     dispatches,
     areas,
+    gearItems,
+    gearReviews,
+    loadouts,
+    gearInsights,
+    loadoutKits,
+    gearCategories,
     isLoading,
     error,
     fetchAreas,
@@ -636,6 +895,10 @@ export function useNitfCms() {
     fetchWaypoints,
     fetchLocationBySlug,
     fetchDispatchBySlug,
-    fetchNearby
+    fetchNearby,
+    fetchGearItems,
+    fetchGearReviews,
+    fetchLoadouts,
+    fetchGear
   }
 }

@@ -114,11 +114,18 @@ export interface Dispatch {
   endDate?: string         // ISO Date of expedition end (optional / multi-day)
   status: 'draft' | 'published'
   locations: Relation<Location>[]
+  loadout?: Relation<Loadout>
   gallery?: DispatchGalleryItem[]
   excerpt: string          // summary for ledger cards
   weather?: string         // e.g. "4°C • MIST • 1018 HPA"
   heroImage?: CmsMedia | string
   content: string | string[] // RichText / paragraphs
+  gpxFile?: Relation<CmsMedia>
+  trailGeometry?: Array<[number, number]> // [lng, lat] coordinate points traversed
+  distanceKm?: number
+  elevationGainM?: number
+  elevationLossM?: number
+  durationHours?: number
 }
 
 // =============================================================================
@@ -142,6 +149,7 @@ export interface GearItem {
   notes?: string          // e.g. "Proven in gale-force winds on exposed crags."
   image?: CmsMedia | string
   productUrl?: string
+  reviews?: Relation<GearReview>[] // One item can have several linked reviews
 }
 
 // =============================================================================
@@ -195,4 +203,5 @@ export interface Loadout {
   tempRange: string      // e.g. "-2°C to 10°C"
   description?: string   // e.g. "Solo gapahuk bivouac, cold mist, peat wetlands"
   items: LoadoutItemEntry[]
+  dispatches?: Relation<Dispatch>[]
 }

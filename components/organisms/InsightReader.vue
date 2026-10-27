@@ -4,12 +4,16 @@ import type { GearInsight } from '~/data/mockGearData'
 interface Props {
   insight: GearInsight | null
   isOpen: boolean
+  relatedInsights?: GearInsight[]
 }
 
 const props = defineProps<Props>()
+const DEFAULT_GEAR_HERO_IMAGE = 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=1000&q=80'
 
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'view-gear', gearItemId: string): void
+  (e: 'select-insight', insight: GearInsight): void
 }>()
 
 function copyShareUrl() {
@@ -58,7 +62,7 @@ function copyShareUrl() {
             <!-- Hero Image Banner -->
             <div class="reader-hero">
               <img
-                :src="insight.image"
+                :src="insight.image || DEFAULT_GEAR_HERO_IMAGE"
                 :alt="insight.title"
                 class="reader-hero-img"
               />
@@ -102,9 +106,20 @@ function copyShareUrl() {
 
               <!-- Test Context Metadata Box -->
               <div class="test-context-box font-mono">
-                <div class="context-entry">
-                  <span class="context-key">TESTED EQUIPMENT:</span>
-                  <span class="context-val">{{ insight.equipmentTested }}</span>
+                <div class="context-entry context-entry-between">
+                  <div class="context-entry-main">
+                    <span class="context-key">TESTED EQUIPMENT:</span>
+                    <span class="context-val">{{ insight.equipmentTested }}</span>
+                  </div>
+                  <button
+                    v-if="insight.gearItemId"
+                    type="button"
+                    class="view-gear-inline-btn font-mono"
+                    @click="emit('view-gear', insight.gearItemId)"
+                  >
+                    <span>VIEW IN MY GEAR</span>
+                    <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                  </button>
                 </div>
                 <div class="context-entry">
                   <span class="context-key">TEST DURATION:</span>
@@ -145,6 +160,33 @@ function copyShareUrl() {
                   </span>
                   <p class="verdict-content">{{ insight.verdict }}</p>
                 </div>
+              </div>
+            </section>
+
+            <!-- Sibling Reviews for the Same Gear Item -->
+            <section
+              v-if="relatedInsights && relatedInsights.length > 0"
+              class="sibling-reviews-section"
+            >
+              <h2 class="section-heading font-mono">
+                <span class="material-symbols-outlined text-[16px] text-secondary">library_books</span>
+                <span>MORE REVIEWS FOR {{ (insight.gearItemName || 'THIS GEAR').toUpperCase() }} ({{ relatedInsights.length }})</span>
+              </h2>
+              <div class="sibling-reviews-list">
+                <button
+                  v-for="rel in relatedInsights"
+                  :key="rel.id"
+                  type="button"
+                  class="sibling-review-card"
+                  @click="emit('select-insight', rel)"
+                >
+                  <div class="sibling-review-meta font-mono">
+                    <span class="sibling-review-tag">{{ rel.category }}</span>
+                    <span>•</span>
+                    <span>{{ rel.date }}</span>
+                  </div>
+                  <div class="sibling-review-title font-serif">{{ rel.title }}</div>
+                </button>
               </div>
             </section>
 
@@ -402,6 +444,38 @@ function copyShareUrl() {
   flex-wrap: wrap;
 }
 
+.context-entry-between {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.context-entry-main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.view-gear-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid rgba(217, 83, 30, 0.35);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-gear-inline-btn:hover {
+  background-color: rgba(217, 83, 30, 0.1);
+}
+
 .context-key {
   color: var(--color-lichen-slate);
   font-weight: 700;
@@ -507,6 +581,55 @@ function copyShareUrl() {
   line-height: 1.45;
   color: var(--color-primary);
   margin: 0;
+}
+
+.sibling-reviews-section {
+  padding: 0 20px 24px;
+}
+
+.sibling-reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sibling-review-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(115, 120, 116, 0.3);
+  background-color: var(--color-surface-container-low);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sibling-review-card:hover {
+  border-color: var(--color-secondary);
+  background-color: var(--color-surface-container);
+}
+
+.sibling-review-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: var(--color-lichen-slate);
+}
+
+.sibling-review-tag {
+  color: var(--color-secondary);
+  font-weight: 700;
+}
+
+.sibling-review-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
 }
 
 /* FOOTER */
