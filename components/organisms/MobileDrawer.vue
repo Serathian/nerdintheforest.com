@@ -12,6 +12,8 @@ import { useTrailheadNav } from '~/composables/useTrailheadNav'
 
 interface Props {
   fieldNotes: FieldNote[]
+  hasAnyLocations?: boolean
+  cmsError?: string | null
   selectedId?: string
   searchQuery?: string
   activeCategory?: string
@@ -22,6 +24,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  hasAnyLocations: false,
+  cmsError: null,
   selectedId: '',
   searchQuery: '',
   activeCategory: 'ALL',
@@ -200,6 +204,8 @@ function handleNavigate(note: FieldNote) {
       <template #drawer>
         <MobileRecentLocationsCarousel
           :field-notes="fieldNotes"
+          :has-any-locations="props.hasAnyLocations"
+          :cms-error="props.cmsError"
           :selected-id="selectedId"
           @select-location="handleSelectLocation"
           @read-story="(id) => emit('read-story', id)"

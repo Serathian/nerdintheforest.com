@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { Dispatch } from '~/types/models'
-import { haversineKm, formatDistance, polylineDistanceKm, splitRouteWithRemainder } from '~/utils/geo'
+import { buildRouteLegBreakdown, resolveActiveElevationData, type LegItem } from '~/utils/dispatchInspection'
 import ElevationProfile, { type ElevationHighlightedRange } from '../atoms/ElevationProfile.vue'
 
 interface WaypointItem {
@@ -82,147 +82,13 @@ function handleTimelineLeave() {
   }
 }
 
-interface LegItem {
-  index: number
-  letter: string
-  segmentLabel: string
-  distanceKm: number
-  distanceFormatted: string
-  fromId: string
-  toId: string
-  startElevation: number
-  destinationElevation: number
-  elevationGain: number
-  elevationLoss: number
-  fromTitle: string
-  toTitle: string
-  routeGeometry?: Array<[number, number]> | null
-  profileWaypoints?: Array<{ order: number; title: string; fraction: number; elevation?: number }>
-}
-
-const routeSplit = computed(() => {
-  const rawGeom: Array<[number, number]> | undefined =
-    props.dispatch?.trailGeometry || (props.dispatch as any)?.trail_geometry
-  const hasGpx = Array.isArray(rawGeom) && rawGeom.length >= 2
-  const wpCoords = (props.waypoints || []).map(w => ({ lng: w.longitude ?? 0, lat: w.latitude ?? 0 }))
-  const split = splitRouteWithRemainder(hasGpx ? rawGeom : undefined, wpCoords)
-  return { hasGpx, rawGeom, ...split }
+const routeBreakdown = computed(() => {
+  return buildRouteLegBreakdown(props.dispatch, props.waypoints)
 })
 
-const prefixLeg = computed<LegItem | null>(() => {
-  if (!props.waypoints || props.waypoints.length === 0) return null
-  const { hasGpx, prefix } = routeSplit.value
-  if (!hasGpx || !prefix || prefix.length < 2) return null
-
-  const distKm = polylineDistanceKm(prefix)
-  if (distKm < 0.05) return null
-
-  const firstWp = props.waypoints[0]
-  const destElev = Math.round(firstWp?.elevation ?? 250)
-  const startElev = destElev
-  const undulatingMargin = Math.max(12, Math.round(distKm * 18))
-
-  return {
-    index: -1,
-    letter: 'START',
-    segmentLabel: 'START LEG',
-    distanceKm: Number(distKm.toFixed(1)),
-    distanceFormatted: formatDistance(distKm),
-    fromId: 'route-start',
-    toId: firstWp.id,
-    startElevation: startElev,
-    destinationElevation: destElev,
-    elevationGain: undulatingMargin,
-    elevationLoss: undulatingMargin,
-    fromTitle: 'TRAIL START',
-    toTitle: firstWp.title,
-    routeGeometry: prefix
-  }
-})
-
-const legs = computed<LegItem[]>(() => {
-  const list: LegItem[] = []
-  if (!props.waypoints || props.waypoints.length < 2) return list
-
-  const { hasGpx, legs: splitLegs } = routeSplit.value
-
-  for (let i = 0; i < props.waypoints.length - 1; i++) {
-    const from = props.waypoints[i]
-    const to = props.waypoints[i + 1]
-    let distKm = 0
-    if (hasGpx && splitLegs[i] && splitLegs[i].length >= 2) {
-      distKm = polylineDistanceKm(splitLegs[i])
-    } else if (from.longitude != null && from.latitude != null && to.longitude != null && to.latitude != null) {
-      distKm = haversineKm([from.longitude, from.latitude], [to.longitude, to.latitude])
-    }
-
-    const startElev = Math.round(from.elevation ?? to.elevation ?? 250)
-    const destElev = Math.round(to.elevation ?? from.elevation ?? 280)
-    const netDiff = destElev - startElev
-    const undulatingMargin = Math.max(12, Math.round(distKm * 18))
-
-    const gain = to.elevationGain != null && to.elevationGain > 0
-      ? Math.round(to.elevationGain)
-      : Math.max(0, netDiff) + undulatingMargin
-    const loss = to.elevationLoss != null && to.elevationLoss > 0
-      ? Math.round(to.elevationLoss)
-      : Math.max(0, -netDiff) + undulatingMargin
-
-    const letter = String.fromCharCode(65 + i)
-    list.push({
-      index: i,
-      letter,
-      segmentLabel: `LEG ${letter}`,
-      distanceKm: Number(distKm.toFixed(1)),
-      distanceFormatted: formatDistance(distKm),
-      fromId: from.id,
-      toId: to.id,
-      startElevation: startElev,
-      destinationElevation: destElev,
-      elevationGain: gain,
-      elevationLoss: loss,
-      fromTitle: from.title,
-      toTitle: to.title,
-      routeGeometry: splitLegs[i] || null
-    })
-  }
-  return list
-})
-
-const suffixLeg = computed<LegItem | null>(() => {
-  if (!props.waypoints || props.waypoints.length === 0) return null
-  const { hasGpx, suffix } = routeSplit.value
-  if (!hasGpx || !suffix || suffix.length < 2) return null
-
-  const distKm = polylineDistanceKm(suffix)
-  if (distKm < 0.05) return null
-
-  const lastIdx = props.waypoints.length - 1
-  const lastWp = props.waypoints[lastIdx]
-  const firstWp = props.waypoints[0]
-  const startElev = Math.round(lastWp?.elevation ?? firstWp?.elevation ?? 250)
-  const destElev = Math.round(firstWp?.elevation ?? startElev)
-  const netDiff = destElev - startElev
-  const undulatingMargin = Math.max(12, Math.round(distKm * 18))
-  const letter = String.fromCharCode(65 + lastIdx)
-
-  return {
-    index: lastIdx,
-    letter,
-    segmentLabel: `LEG ${letter}`,
-    distanceKm: Number(distKm.toFixed(1)),
-    distanceFormatted: formatDistance(distKm),
-    fromId: lastWp.id,
-    toId: 'route-end',
-    startElevation: startElev,
-    destinationElevation: destElev,
-    elevationGain: Math.max(0, netDiff) + undulatingMargin,
-    elevationLoss: Math.max(0, -netDiff) + undulatingMargin,
-    fromTitle: lastWp.title,
-    toTitle: 'TRAIL END',
-    routeGeometry: suffix
-  }
-})
+const prefixLeg = computed<LegItem | null>(() => routeBreakdown.value.prefixLeg)
+const legs = computed<LegItem[]>(() => routeBreakdown.value.legs)
+const suffixLeg = computed<LegItem | null>(() => routeBreakdown.value.suffixLeg)
 
 function getLegByIndex(idx: number | null | undefined): LegItem | null {
   if (idx === null || idx === undefined) return null
@@ -240,91 +106,7 @@ const effectiveLegHighlight = computed<number | null>(() => {
   return props.selectedLegIndex ?? null
 })
 
-const wholeRouteData = computed(() => {
-  if (!props.waypoints || props.waypoints.length === 0) return null
-
-  const firstKnownElev = props.waypoints.find(w => w.elevation != null)?.elevation ?? 250
-  const lastKnownElev = [...props.waypoints].reverse().find(w => w.elevation != null)?.elevation ?? firstKnownElev
-
-  const startElev = Math.round(props.waypoints[0]?.elevation ?? firstKnownElev)
-  const destElev = Math.round(props.waypoints[props.waypoints.length - 1]?.elevation ?? lastKnownElev)
-
-  const { hasGpx, orientedGeometry } = routeSplit.value
-
-  const preDist = prefixLeg.value?.distanceKm ?? 0
-  const interDists = legs.value.map(l => l.distanceKm)
-  const sufDist = suffixLeg.value?.distanceKm ?? 0
-  const sumSegmentDists = preDist + interDists.reduce((a, b) => a + b, 0) + sufDist
-
-  const dispatchDist = props.dispatch?.distanceKm ?? (props.dispatch as any)?.distance_km
-  let totalDistKm = 0
-  if (dispatchDist != null && Number(dispatchDist) > 0) {
-    totalDistKm = Number(dispatchDist)
-  } else if (sumSegmentDists > 0) {
-    totalDistKm = sumSegmentDists
-  } else if (hasGpx) {
-    totalDistKm = polylineDistanceKm(orientedGeometry)
-  }
-
-  // Compute each waypoint's distance fraction along the full route for profile markers
-  const effectiveSpanKm = sumSegmentDists > 0 ? sumSegmentDists : Math.max(totalDistKm, 0.1)
-  const profileWaypoints: Array<{ order: number; title: string; fraction: number; elevation?: number }> = []
-  let cumKm = preDist
-  for (let i = 0; i < props.waypoints.length; i++) {
-    const wp = props.waypoints[i]
-    const frac = Math.max(0, Math.min(1, cumKm / effectiveSpanKm))
-    profileWaypoints.push({
-      order: wp.order,
-      title: wp.title,
-      fraction: frac,
-      elevation: wp.elevation
-    })
-    if (i < interDists.length) {
-      cumKm += interDists[i]
-    }
-  }
-
-  const dispatchGain = props.dispatch?.elevationGainM ?? (props.dispatch as any)?.elevation_gain_m
-  const dispatchLoss = props.dispatch?.elevationLossM ?? (props.dispatch as any)?.elevation_loss_m
-  const netDiff = destElev - startElev
-  const undulatingMargin = Math.max(12, Math.round(totalDistKm * 18))
-
-  const totalGain = dispatchGain != null && Number(dispatchGain) > 0
-    ? Math.round(Number(dispatchGain))
-    : legs.value.length > 0
-      ? Math.round(
-          (prefixLeg.value?.elevationGain ?? 0) +
-          legs.value.reduce((sum, leg) => sum + leg.elevationGain, 0) +
-          (suffixLeg.value?.elevationGain ?? 0)
-        )
-      : Math.max(0, netDiff) + undulatingMargin
-
-  const totalLoss = dispatchLoss != null && Number(dispatchLoss) > 0
-    ? Math.round(Number(dispatchLoss))
-    : legs.value.length > 0
-      ? Math.round(
-          (prefixLeg.value?.elevationLoss ?? 0) +
-          legs.value.reduce((sum, leg) => sum + leg.elevationLoss, 0) +
-          (suffixLeg.value?.elevationLoss ?? 0)
-        )
-      : Math.max(0, -netDiff) + undulatingMargin
-
-  const fromTitle = prefixLeg.value ? 'TRAIL START' : (props.waypoints[0]?.title || 'START')
-  const toTitle = suffixLeg.value ? 'TRAIL END' : (props.waypoints[props.waypoints.length - 1]?.title || 'FINISH')
-
-  return {
-    segmentLabel: 'FULL ROUTE',
-    startElevation: startElev,
-    destinationElevation: destElev,
-    elevationGain: totalGain,
-    elevationLoss: totalLoss,
-    distanceKm: Number(totalDistKm.toFixed(1)),
-    fromTitle,
-    toTitle,
-    routeGeometry: hasGpx ? orientedGeometry : null,
-    profileWaypoints
-  }
-})
+const wholeRouteData = computed(() => routeBreakdown.value.wholeRouteData)
 
 const isHoveringWholeRoutePreview = computed(() => {
   if (hoveredLocationId.value !== null) return true
@@ -333,9 +115,11 @@ const isHoveringWholeRoutePreview = computed(() => {
 })
 
 const activeElevationData = computed(() => {
-  if (isHoveringWholeRoutePreview.value) return wholeRouteData.value
-  if (selectedLegData.value) return selectedLegData.value
-  return wholeRouteData.value
+  return resolveActiveElevationData({
+    wholeRouteData: wholeRouteData.value,
+    selectedLegData: selectedLegData.value,
+    isHoveringWholeRoutePreview: isHoveringWholeRoutePreview.value
+  })
 })
 
 const hoveredWaypointOrder = computed<number | null>(() => {
@@ -418,7 +202,7 @@ function getCategoryIcon(cat?: string): string {
     </div>
 
     <!-- Sequential Timeline Stepper Track -->
-    <div class="timeline-stepper-track scroll-hint-x" @mouseleave="handleTimelineLeave">
+    <div v-if="waypoints.length > 0" class="timeline-stepper-track scroll-hint-x" @mouseleave="handleTimelineLeave">
       <div class="timeline-row">
         <!-- Optional Prefix Leg Connector before first listed location -->
         <div

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fallbackFieldNotes } from '../../composables/useNitfCms'
+import { mockFieldNotes as fallbackFieldNotes } from '../../data/mockNordicTrail'
 import { calculateMapFocusPadding } from '../../utils/mapViewport'
 
 describe('Mobile Map View Component Specifications', () => {

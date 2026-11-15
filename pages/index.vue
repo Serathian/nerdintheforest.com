@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { FilterState } from '~/components/organisms/FilterModal.vue'
 import { calculateMapFocusPadding, measureDrawerTop } from '~/utils/mapViewport'
 import { splitRouteWithRemainder } from '~/utils/geo'
+import { buildInspectedRoute, collectInspectedRouteFocusPoints } from '~/utils/dispatchInspection'
 
 useHead({
   title: 'Nerd in the Forest — Nordic Cartography & Adventure Atlas',
@@ -42,7 +43,7 @@ const filters = ref<FilterState>({
   amenities: []
 })
 
-const { fieldNotes, mapWaypoints, locations, dispatches, fetchAreas, fetchPosts, fetchWaypoints, fetchDispatchBySlug, fetchLocationBySlug } = useNitfCms()
+const { fieldNotes, mapWaypoints, locations, dispatches, error: cmsError, fetchAreas, fetchPosts, fetchWaypoints, fetchDispatchBySlug, fetchLocationBySlug } = useNitfCms()
 
 await useAsyncData('nitf-atlas-cms', async () => {
   await Promise.all([
@@ -198,27 +199,11 @@ const inspectedWaypoints = computed(() => {
 })
 
 const inspectedRoute = computed(() => {
-  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return null
-  const d = activeInspectedDispatch.value
-  const geom: Array<[number, number]> | undefined = d.trailGeometry || d.trail_geometry
-  return {
-    dispatchId: d.id,
-    title: d.title,
-    geometry: geom && Array.isArray(geom) && geom.length > 0 ? geom : undefined,
-    waypoints: inspectedWaypoints.value
-      .filter(w => w.latitude != null && w.longitude != null)
-      .map(w => ({
-        id: w.id,
-        title: w.title,
-        lat: w.latitude!,
-        lng: w.longitude!,
-        order: w.order
-      }))
-  }
+  return buildInspectedRoute(activeInspectedDispatch.value, inspectedWaypoints.value)
 })
 
 async function focusInspectedRoute() {
-  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return
+  if (!activeInspectedDispatch.value || !inspectedRoute.value) return
 
   const reqId = ++focusRequestId
 
@@ -228,22 +213,19 @@ async function focusInspectedRoute() {
   }
 
   if (reqId !== focusRequestId) return
-  if (!activeInspectedDispatch.value || inspectedWaypoints.value.length === 0) return
+  if (!activeInspectedDispatch.value || !inspectedRoute.value) return
   if (selectedLegIndex.value !== null || selectedNoteId.value) return
 
-  const points: Array<[number, number]> = inspectedWaypoints.value
-    .filter(w => w.longitude != null && w.latitude != null)
-    .map(w => [w.longitude!, w.latitude!])
-
-  if (inspectedRoute.value?.geometry?.length) {
-    points.push(...inspectedRoute.value.geometry)
-  }
+  const points = collectInspectedRouteFocusPoints(inspectedRoute.value)
 
   if (points.length > 0) {
     if (!mapRef.value) {
       setTimeout(() => {
         if (reqId === focusRequestId && selectedLegIndex.value === null && !selectedNoteId.value) {
-          mapRef.value?.focusOn(points, getMapFocusPadding())
+          const latestPoints = collectInspectedRouteFocusPoints(inspectedRoute.value)
+          if (latestPoints.length > 0) {
+            mapRef.value?.focusOn(latestPoints, getMapFocusPadding())
+          }
         }
       }, 120)
       return
@@ -338,7 +320,7 @@ function handleMapClick() {
 }
 
 function handleMapReady() {
-  if (activeInspectedDispatch.value && inspectedWaypoints.value.length > 0) {
+  if (activeInspectedDispatch.value && inspectedRoute.value) {
     if (selectedLegIndex.value !== null) {
       focusLeg(selectedLegIndex.value)
     } else if (selectedNoteId.value) {
@@ -349,7 +331,7 @@ function handleMapReady() {
   }
 }
 
-watch([activeInspectedDispatch, inspectedWaypoints], ([d, wps]) => {
+watch([activeInspectedDispatch, inspectedWaypoints], ([d]) => {
   if (d) {
     activeDispatchInspection.value = {
       dispatchId: d.id,
@@ -357,7 +339,7 @@ watch([activeInspectedDispatch, inspectedWaypoints], ([d, wps]) => {
       title: d.title,
       locationsCount: d.locations?.length || 0
     }
-    if (wps.length > 0 && !selectedNoteId.value && selectedLegIndex.value === null) {
+    if (inspectedRoute.value && !selectedNoteId.value && selectedLegIndex.value === null) {
       focusInspectedRoute()
     }
   } else if (!route.query.dispatch && !route.query.story) {
@@ -918,7 +900,7 @@ function showNotification(msg: string) {
     </main>
 
     <!-- TWO-ZONE BOTTOM DRAWER (docked fixed at bottom: 64px) -->
-    <MobileDrawer ref="drawerRef" :field-notes="filteredFieldNotes" :selected-id="selectedNoteId"
+    <MobileDrawer ref="drawerRef" :field-notes="filteredFieldNotes" :has-any-locations="fieldNotes.length > 0" :cms-error="cmsError" :selected-id="selectedNoteId"
       :search-query="searchQuery" :active-category="activeCategory" :active-filter-count="activeFilterCount"
       :active-dispatch="activeInspectedDispatch" :inspected-waypoints="inspectedWaypoints"
       :selected-leg-index="selectedLegIndex"

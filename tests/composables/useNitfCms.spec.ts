@@ -1,66 +1,129 @@
-import { describe, it, expect } from 'vitest'
-import { fallbackFieldNotes, fallbackMapWaypoints, transformPostToFieldNote, useNitfCms } from '../../composables/useNitfCms'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { useNitfCms } from '../../composables/useNitfCms'
 
 describe('useNitfCms Composable & Data Transformers', () => {
-  it('provides rich fallback field notes when offline', () => {
-    expect(fallbackFieldNotes.length).toBeGreaterThanOrEqual(6)
-    expect(fallbackFieldNotes[0].title).toBe('Langvatnet Gapahuk')
-    expect(fallbackFieldNotes[0].numberTag).toBe('#04 SHELTER')
-    expect(fallbackFieldNotes[0].elevation).toBe(501)
-    expect(fallbackFieldNotes[0].distanceKm).toBe(1.2)
+  beforeEach(() => {
+    vi.unstubAllGlobals()
   })
 
-  it('provides fallback map waypoints with lat/lng', () => {
-    expect(fallbackMapWaypoints.length).toBeGreaterThanOrEqual(6)
-    expect(fallbackMapWaypoints[0].lat).toBeCloseTo(60.271, 2)
-    expect(fallbackMapWaypoints[0].lng).toBeCloseTo(10.732, 2)
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
-  it('covers all Stitch categories across fallback field notes', () => {
-    const categories = fallbackFieldNotes.map(n => n.category)
-    expect(categories).toContain('SHELTER')
-    expect(categories).toContain('HEARTH')
-    expect(categories).toContain('SPRINGHEAD')
-    expect(categories).toContain('SUMMIT')
-    expect(categories).toContain('VIEWPOINT')
+  it('starts empty with zero mock data fallback before CMS loads', () => {
+    const {
+      fieldNotes,
+      mapWaypoints,
+      locations,
+      dispatches,
+      areas,
+      gearItems,
+      gearReviews,
+      loadouts,
+      gearInsights,
+      loadoutKits,
+      gearCategories,
+    } = useNitfCms()
+
+    expect(fieldNotes.value).toEqual([])
+    expect(mapWaypoints.value).toEqual([])
+    expect(locations.value).toEqual([])
+    expect(dispatches.value).toEqual([])
+    expect(areas.value).toEqual([])
+    expect(gearItems.value).toEqual([])
+    expect(gearReviews.value).toEqual([])
+    expect(loadouts.value).toEqual([])
+    expect(gearInsights.value).toEqual([])
+    expect(loadoutKits.value).toEqual([])
+    expect(gearCategories.value).toEqual([])
   })
 
-  it('transforms CMS posts into frontend FieldNotes correctly', () => {
-    const rawPost = {
-      id: 'cms-post-101',
-      title: 'Nordmarka Ridge Survey',
-      excerpt: 'High elevation patrol along ridge line',
-      latitude: 60.15,
-      longitude: 10.43,
-      elevation: 520,
-      createdAt: '2026-03-01T12:00:00Z',
-      amenities: ['Summit', 'Campground']
-    }
+  it('sets error and preserves empty state instead of mocks when CMS is offline', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network offline')))
 
-    const transformed = transformPostToFieldNote(rawPost, 0)
-    expect(transformed.id).toBe('cms-post-101')
-    expect(transformed.numberTag).toBe('#01 FIELD NOTE')
-    expect(transformed.title).toBe('Nordmarka Ridge Survey')
-    expect(transformed.description).toBe('High elevation patrol along ridge line')
-    expect(transformed.metrics).toContain('520m')
-    expect(transformed.latitude).toBe(60.15)
+    const {
+      locations,
+      dispatches,
+      gearItems,
+      loadoutKits,
+      error,
+      fetchWaypoints,
+      fetchPosts,
+      fetchGear,
+      fetchLocationBySlug,
+      fetchDispatchBySlug,
+    } = useNitfCms()
+
+    await fetchWaypoints()
+    expect(locations.value).toEqual([])
+    expect(error.value).toBeTruthy()
+
+    await fetchPosts()
+    expect(dispatches.value).toEqual([])
+    expect(error.value).toBeTruthy()
+
+    await fetchGear()
+    expect(gearItems.value).toEqual([])
+    expect(loadoutKits.value).toEqual([])
+    expect(error.value).toBeTruthy()
+
+    await expect(fetchLocationBySlug('non-existent')).resolves.toBeNull()
+    await expect(fetchDispatchBySlug('non-existent')).resolves.toBeNull()
   })
 
-  it('exposes normalized locations and dispatches with derived visit count', () => {
-    const { locations, dispatches, areas } = useNitfCms()
-    expect(areas.value.length).toBeGreaterThanOrEqual(2)
-    expect(locations.value.length).toBeGreaterThanOrEqual(6)
-    expect(dispatches.value.length).toBeGreaterThanOrEqual(5)
+  it('hydrates empty and populated CMS docs without leaking mock content', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes('/nitf_areas')) {
+        return {
+          ok: true,
+          json: async () => ({
+            docs: [{ id: 'area-1', name: 'Pirkanmaa', slug: 'pirkanmaa' }],
+          }),
+        }
+      }
+      if (url.includes('/nitf_locations')) {
+        return {
+          ok: true,
+          json: async () => ({
+            docs: [
+              {
+                id: 'loc-1',
+                name: 'Vähä-Riutta Laavu',
+                slug: 'vaha-riutta-laavu',
+                area: { id: 'area-1', name: 'Pirkanmaa', slug: 'pirkanmaa' },
+                category: 'shelter',
+                latitude: 61.34,
+                longitude: 23.76,
+                amenities: ['timber_shelter'],
+              },
+            ],
+          }),
+        }
+      }
+      if (url.includes('/nitf_dispatches')) {
+        return {
+          ok: true,
+          json: async () => ({ docs: [] }),
+        }
+      }
+      return {
+        ok: true,
+        json: async () => ({ docs: [] }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
 
-    // Unvisited location has 0 dispatches
-    const unvisited = locations.value.find(l => l.id === 'note-2')
-    expect(unvisited).toBeDefined()
-    expect(unvisited?.dispatches?.length).toBe(0)
+    const { locations, fieldNotes, mapWaypoints, dispatches, error, fetchWaypoints, fetchPosts } = useNitfCms()
+    await fetchWaypoints()
+    await fetchPosts()
 
-    // Visited location has matching linked dispatches
-    const visited = locations.value.find(l => l.id === 'note-1')
-    expect(visited).toBeDefined()
-    expect(visited?.dispatches?.length).toBeGreaterThanOrEqual(2)
+    expect(error.value).toBeNull()
+    expect(locations.value).toHaveLength(1)
+    expect(fieldNotes.value).toHaveLength(1)
+    expect(fieldNotes.value[0].area).toBe('Pirkanmaa')
+    expect(mapWaypoints.value).toHaveLength(1)
+    expect(dispatches.value).toEqual([])
   })
 
   it('transforms live Payload CMS location docs into client models', async () => {

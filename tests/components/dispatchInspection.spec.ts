@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { mockDispatches, mockLocations } from '../../data/mockNordicTrail'
 import { polylineDistanceKm, splitRouteIntoLegs, formatDistance } from '../../utils/geo'
+import { transformCmsDispatch } from '../../composables/useNitfCms'
+import {
+  buildInspectedRoute,
+  buildInspectedRouteLineGeoJSON,
+  buildRouteLegBreakdown,
+  collectInspectedRouteFocusPoints,
+  resolveActiveElevationData
+} from '../../utils/dispatchInspection'
 
 describe('Atlas Dispatch Inspection Mode (/ ?dispatch=slug / ?story=slug)', () => {
   it('identifies multi-location dispatches for inspection', () => {
@@ -354,5 +362,188 @@ describe('Atlas Dispatch Inspection Mode (/ ?dispatch=slug / ?story=slug)', () =
     expect(mapPointsOnLegHover[1].isSelected).toBe(true)
     expect(mapPointsOnLegHover[2].isSelected).toBe(false)
     expect(mapPointsOnLegHover[2].opacity).toBe(0.35)
+  })
+
+  it('builds inspected route and MapLibre LineString features from dynamic CMS trail_geometry across multi-waypoint, single-waypoint, and GPX-only dispatches', () => {
+    // 1. Multi-waypoint CMS dispatch with trail_geometry (and extra prefix/suffix GPX segments)
+    const multiDoc = {
+      id: 41,
+      slug: 'cms-birgitan-traverse',
+      title: 'CMS Birgitan Traverse',
+      status: 'published',
+      distance_km: 12.4,
+      elevation_gain_m: 260,
+      elevation_loss_m: 245,
+      trail_geometry: [
+        [23.8800, 61.4250], // prefix start before wp 1
+        [23.8940, 61.4140],
+        [23.9085, 61.4045], // wp 1
+        [23.9165, 61.3850],
+        [23.9246, 61.3665], // wp 2
+        [23.8400, 61.3645]  // suffix end after wp 2
+      ],
+      locations: [
+        {
+          id: 101,
+          slug: 'vaha-riutta-laavu',
+          name: 'Vähä-Riutta Laavu',
+          latitude: 61.4045,
+          longitude: 23.9085,
+          elevation: 165
+        },
+        {
+          id: 102,
+          slug: 'vaha-kauas-laavu',
+          name: 'Vähä-Kauas Laavu',
+          latitude: 61.3665,
+          longitude: 23.9246,
+          elevation: 150
+        }
+      ]
+    }
+
+    const multiDispatch = transformCmsDispatch(multiDoc)
+    const multiWaypoints = multiDispatch.locations.map((loc: any, idx: number) => ({
+      id: loc.id,
+      slug: loc.slug,
+      title: loc.name,
+      elevation: loc.elevation,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      order: idx + 1
+    }))
+
+    const multiRoute = buildInspectedRoute(multiDispatch, multiWaypoints)
+    expect(multiRoute).not.toBeNull()
+    expect(multiRoute!.waypoints).toHaveLength(2)
+    expect(multiRoute!.geometry).toEqual(multiDoc.trail_geometry)
+
+    const multiGeoJson = buildInspectedRouteLineGeoJSON(multiRoute, 0)
+    // prefix (-1), leg A (0), suffix (1) -> selected leg 0 sorted last
+    expect(multiGeoJson.features).toHaveLength(3)
+    expect(multiGeoJson.features.map(f => f.properties.legIndex)).toEqual([-1, 1, 0])
+    expect(multiGeoJson.features[2].properties.isSelected).toBe(true)
+    expect(multiGeoJson.features[2].properties.opacity).toBe(1.0)
+    expect(multiGeoJson.features[0].properties.opacity).toBe(0.25)
+
+    // 2. GPX-only CMS dispatch (0 linked locations, dynamic trail_geometry >= 2 points)
+    const gpxOnlyDoc = {
+      id: 42,
+      slug: 'cms-gpx-only-loop',
+      title: 'Solo Pirkanmaa Ridge GPX Loop',
+      status: 'published',
+      locations: [],
+      distance_km: 5.8,
+      elevation_gain_m: 185,
+      elevation_loss_m: 180,
+      trail_geometry: [
+        [23.8120, 61.9960, 142],
+        [23.8250, 62.0080, 198],
+        [23.8410, 62.0190, 174],
+        [23.8540, 62.0250, 156]
+      ]
+    }
+
+    const gpxOnlyDispatch = transformCmsDispatch(gpxOnlyDoc)
+    const gpxOnlyRoute = buildInspectedRoute(gpxOnlyDispatch, [])
+    expect(gpxOnlyRoute).not.toBeNull()
+    expect(gpxOnlyRoute!.dispatchId).toBe('cms-gpx-only-loop')
+    expect(gpxOnlyRoute!.waypoints).toEqual([])
+    expect(gpxOnlyRoute!.geometry).toEqual(gpxOnlyDoc.trail_geometry)
+
+    // Focus points include all GPX track coordinates for camera framing
+    expect(collectInspectedRouteFocusPoints(gpxOnlyRoute)).toEqual(gpxOnlyDoc.trail_geometry)
+
+    // MapCanvas fallback renders the full GPX LineString
+    const gpxOnlyGeoJson = buildInspectedRouteLineGeoJSON(gpxOnlyRoute, null)
+    expect(gpxOnlyGeoJson.features).toHaveLength(1)
+    expect(gpxOnlyGeoJson.features[0].geometry).toEqual({
+      type: 'LineString',
+      coordinates: gpxOnlyDoc.trail_geometry
+    })
+    expect(gpxOnlyGeoJson.features[0].properties.legIndex).toBeNull()
+    expect(gpxOnlyGeoJson.features[0].properties.opacity).toBe(0.85)
+
+    // MobileDispatchInspectionPeek resolves wholeRouteData & activeElevationData cleanly
+    const gpxBreakdown = buildRouteLegBreakdown(gpxOnlyDispatch, [])
+    expect(gpxBreakdown.prefixLeg).toBeNull()
+    expect(gpxBreakdown.legs).toEqual([])
+    expect(gpxBreakdown.suffixLeg).toBeNull()
+    expect(gpxBreakdown.wholeRouteData).not.toBeNull()
+    expect(gpxBreakdown.wholeRouteData!.distanceKm).toBe(5.8)
+    expect(gpxBreakdown.wholeRouteData!.elevationGain).toBe(185)
+    expect(gpxBreakdown.wholeRouteData!.elevationLoss).toBe(180)
+    expect(gpxBreakdown.wholeRouteData!.startElevation).toBe(142)
+    expect(gpxBreakdown.wholeRouteData!.destinationElevation).toBe(156)
+    expect(gpxBreakdown.wholeRouteData!.routeGeometry).toEqual(gpxOnlyDoc.trail_geometry)
+    expect(gpxBreakdown.wholeRouteData!.profileWaypoints).toEqual([])
+
+    const activeElevation = resolveActiveElevationData({
+      wholeRouteData: gpxBreakdown.wholeRouteData,
+      selectedLegData: null,
+      isHoveringWholeRoutePreview: false
+    })
+    expect(activeElevation).toEqual(gpxBreakdown.wholeRouteData)
+
+    // 3. Single-waypoint dispatch with a GPX track renders both prefix/suffix legs & elevation profile
+    const singleWpDispatch = transformCmsDispatch({
+      id: 43,
+      slug: 'cms-single-waypoint-gpx',
+      title: 'Kikut Out-and-Back',
+      status: 'published',
+      trail_geometry: {
+        type: 'LineString',
+        coordinates: [
+          [10.6300, 60.0750],
+          [10.6550, 60.0880],
+          [10.6780, 60.0980]
+        ]
+      },
+      locations: [
+        {
+          id: 201,
+          slug: 'kikut-peak',
+          name: 'Kikut Peak (604m)',
+          latitude: 60.0880,
+          longitude: 10.6550,
+          elevation: 604
+        }
+      ]
+    })
+    const singleWp = [{
+      id: 'kikut-peak',
+      slug: 'kikut-peak',
+      title: 'Kikut Peak (604m)',
+      elevation: 604,
+      latitude: 60.0880,
+      longitude: 10.6550,
+      order: 1
+    }]
+    const singleRoute = buildInspectedRoute(singleWpDispatch, singleWp)
+    expect(singleRoute).not.toBeNull()
+    const singleGeoJson = buildInspectedRouteLineGeoJSON(singleRoute, null)
+    expect(singleGeoJson.features).toHaveLength(2)
+    expect(singleGeoJson.features.map(f => f.properties.legIndex)).toEqual([-1, 0])
+
+    const singleBreakdown = buildRouteLegBreakdown(singleWpDispatch, singleWp)
+    expect(singleBreakdown.prefixLeg).not.toBeNull()
+    expect(singleBreakdown.suffixLeg).not.toBeNull()
+    expect(singleBreakdown.wholeRouteData).not.toBeNull()
+    expect(singleBreakdown.wholeRouteData!.elevationGain).toBeGreaterThan(0)
+    expect(singleBreakdown.wholeRouteData!.profileWaypoints).toHaveLength(1)
+    expect(singleBreakdown.wholeRouteData!.profileWaypoints[0].fraction).toBeGreaterThan(0)
+    expect(singleBreakdown.wholeRouteData!.profileWaypoints[0].fraction).toBeLessThan(1)
+
+    // 4. Empty dispatch (0 waypoints and no/1-point trail_geometry) produces null route & empty GeoJSON
+    const emptyDispatch = transformCmsDispatch({
+      id: 44,
+      slug: 'empty-dispatch',
+      title: 'Text Only Dispatch',
+      locations: [],
+      trail_geometry: [[10.6550, 60.0880]]
+    })
+    expect(buildInspectedRoute(emptyDispatch, [])).toBeNull()
+    expect(buildInspectedRouteLineGeoJSON(null, null).features).toEqual([])
+    expect(buildRouteLegBreakdown(emptyDispatch, []).wholeRouteData).toBeNull()
   })
 })

@@ -49,7 +49,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     cmsApiInternal: process.env.CMS_API_INTERNAL || 'http://localhost:3000/api',
     public: {
-      cmsApiBase: process.env.NUXT_PUBLIC_CMS_API_BASE || '/api/cms'
+      cmsApiBase: process.env.NUXT_PUBLIC_CMS_API_BASE || '/api/cms',
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://nerdintheforest.com'
     }
   }
 })

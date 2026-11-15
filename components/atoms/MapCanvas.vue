@@ -3,7 +3,8 @@ import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { MARKER_IMAGE_PREFIX, createMarkerImage, parseMarkerImageId } from '~/utils/mapMarkers'
-import { formatDistance, haversineKm, splitRouteWithRemainder } from '~/utils/geo'
+import { formatDistance, haversineKm } from '~/utils/geo'
+import { buildInspectedRouteLineGeoJSON } from '~/utils/dispatchInspection'
 
 interface Waypoint {
   id: string
@@ -62,8 +63,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   activeLayer: 'topo',
-  center: () => [10.715, 60.270], // Nordmarka sector framing Langvatnet, Dalasjøhøgda & Bjørgeseterfjellet
-  zoom: 12.2,
+  center: () => [23.85, 61.85], // Pirkanmaa region default center
+  zoom: 9.5,
   trailhead: null,
   userLocation: null,
   inspectedRoute: null,
@@ -142,95 +143,6 @@ function buildWaypointsGeoJSON(waypoints: Waypoint[], selectedId?: string, inspe
       }
     })
   }
-}
-
-function buildInspectedRouteLineGeoJSON(
-  route?: InspectedRoute | null,
-  selectedLegIndex?: number | null,
-  hoveredLegIndex?: number | null
-) {
-  if (!route) return EMPTY_FC
-
-  const hasGpx = Array.isArray(route.geometry) && route.geometry.length >= 2
-  const hasWaypoints = Array.isArray(route.waypoints) && route.waypoints.length >= 1
-
-  if (hasWaypoints && (route.waypoints.length >= 2 || hasGpx)) {
-    const sorted = [...route.waypoints].sort((a, b) => a.order - b.order)
-    const { legs: legGeometries, prefix, suffix } = splitRouteWithRemainder(route.geometry, sorted)
-    const effectiveLegIdx =
-      hoveredLegIndex !== null && hoveredLegIndex !== undefined ? hoveredLegIndex : selectedLegIndex
-    const hasLegSelection = effectiveLegIdx !== null && effectiveLegIdx !== undefined
-    const features: any[] = []
-
-    const pushLegSegment = (coords: Array<[number, number]> | null, legIdx: number, letter: string) => {
-      if (!coords || coords.length < 2) return
-      const isSelected = hasLegSelection && effectiveLegIdx === legIdx
-      const opacity = hasLegSelection ? (isSelected ? 1.0 : 0.25) : 0.85
-      const lineWidth = isSelected ? (hasGpx ? 5.5 : 4.5) : (hasGpx ? 3.5 : 2.5)
-      const casingWidth = isSelected ? (hasGpx ? 8.5 : 7) : (hasGpx ? 5.5 : 4.5)
-
-      features.push({
-        type: 'Feature' as const,
-        properties: {
-          legIndex: legIdx,
-          letter,
-          isSelected,
-          opacity,
-          lineWidth,
-          casingWidth
-        },
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: coords
-        }
-      })
-    }
-
-    pushLegSegment(prefix, -1, 'START')
-
-    for (let i = 0; i < legGeometries.length; i++) {
-      pushLegSegment(legGeometries[i], i, String.fromCharCode(65 + i))
-    }
-
-    const suffixIdx = sorted.length - 1
-    pushLegSegment(suffix, suffixIdx, String.fromCharCode(65 + suffixIdx))
-
-    // Place the selected/hovered leg last so its full-opacity casing and stroke render cleanly above adjacent dimmed leg endpoints
-    if (hasLegSelection) {
-      features.sort((a, b) => (a.properties.isSelected ? 1 : 0) - (b.properties.isSelected ? 1 : 0))
-    }
-
-    return {
-      type: 'FeatureCollection' as const,
-      features
-    }
-  }
-
-  // Fallback for single-location dispatch with a GPX track
-  if (hasGpx) {
-    return {
-      type: 'FeatureCollection' as const,
-      features: [
-        {
-          type: 'Feature' as const,
-          properties: {
-            legIndex: -1,
-            letter: '',
-            isSelected: false,
-            opacity: 0.85,
-            lineWidth: 3.5,
-            casingWidth: 5.5
-          },
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: route.geometry!
-          }
-        }
-      ]
-    }
-  }
-
-  return EMPTY_FC
 }
 
 function buildInspectedRoutePointsGeoJSON(

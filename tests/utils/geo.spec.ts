@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { extractElevationTelemetry, formatDistance, haversineKm, polylineDistanceKm, splitRouteIntoLegs, splitRouteWithRemainder } from '../../utils/geo'
-import { fallbackFieldNotes } from '../../composables/useNitfCms'
+import { mockFieldNotes as fallbackFieldNotes } from '../../data/mockNordicTrail'
 
 describe('geo utils', () => {
   it('computes great-circle distance in km', () => {

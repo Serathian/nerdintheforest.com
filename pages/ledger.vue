@@ -17,7 +17,7 @@ useHead({
 })
 
 const router = useRouter()
-const { dispatches, locations, areas, fetchAreas, fetchWaypoints, fetchPosts } = useNitfCms()
+const { dispatches, locations, areas, error: cmsError, fetchAreas, fetchWaypoints, fetchPosts } = useNitfCms()
 
 await useAsyncData('nitf-ledger-dispatches', async () => {
   await Promise.all([
@@ -140,7 +140,7 @@ const filteredDispatches = computed(() => {
 })
 
 const primaryArchiveAreaLabel = computed(() => {
-  return (areas.value[0]?.name || 'PIRKANMAA').toUpperCase()
+  return (areas.value[0]?.name || 'NORDIC ARCHIVE').toUpperCase()
 })
 
 function openDispatch(dispatch: { slug: string; id: string }) {
@@ -199,7 +199,15 @@ function openDispatch(dispatch: { slug: string; id: string }) {
       <main class="entries-stream">
         <div v-if="filteredDispatches.length === 0" class="empty-state font-mono">
           <span class="material-symbols-outlined" style="font-size: 28px; color: var(--color-outline);">travel_explore</span>
-          <p>No field dispatches match current query.</p>
+          <p>
+            {{
+              dispatches.length === 0
+                ? (cmsError
+                    ? 'Unable to load field dispatches while Basecamp CMS is unreachable.'
+                    : 'No field dispatches published yet.')
+                : 'No field dispatches match current query.'
+            }}
+          </p>
         </div>
 
         <article

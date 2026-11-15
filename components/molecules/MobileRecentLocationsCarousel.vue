@@ -5,6 +5,8 @@ import RecentCard from './RecentCard.vue'
 interface Props {
   fieldNotes: FieldNote[]
   selectedId?: string
+  hasAnyLocations?: boolean
+  cmsError?: string | null
 }
 
 withDefaults(defineProps<Props>(), {
@@ -40,9 +42,21 @@ const emit = defineEmits<{
     <!-- Empty state when active filters yield 0 matches -->
     <div v-else class="empty-state">
       <span class="material-symbols-outlined empty-icon">explore_off</span>
-      <span class="empty-title font-serif">No locations match active filters</span>
+      <span class="empty-title font-serif">{{
+        hasAnyLocations
+          ? 'No locations match active filters'
+          : cmsError
+            ? 'Unable to reach Basecamp CMS'
+            : 'No locations published yet'
+      }}</span>
       <span class="empty-desc font-mono">
-        Try adjusting keywords or selecting ALL LOCATIONS
+        {{
+          hasAnyLocations
+            ? 'Try adjusting keywords or selecting ALL LOCATIONS'
+            : cmsError
+              ? 'Telemetry archive will sync once CMS connectivity returns.'
+              : 'Field stations and shelters will appear here once published.'
+        }}
       </span>
     </div>
   </div>

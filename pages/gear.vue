@@ -6,7 +6,7 @@ import {
 } from '~/data/mockGearData'
 import { useNitfCms } from '~/composables/useNitfCms'
 
-const { gearItems, gearInsights, loadoutKits, gearCategories, fetchGear } = useNitfCms()
+const { gearItems, gearInsights, loadoutKits, gearCategories, error: cmsError, fetchGear } = useNitfCms()
 
 await useAsyncData('nitf-gear-ledger', () => fetchGear())
 
@@ -620,9 +620,21 @@ async function copyLoadoutManifest() {
         <!-- Empty State when no reviews match search/filter -->
         <div v-if="filteredInsights.length === 0" class="insights-empty-state font-mono">
           <span class="material-symbols-outlined empty-icon">manage_search</span>
-          <p class="empty-title">NO GEAR REVIEWS MATCH CURRENT FILTER</p>
+          <p class="empty-title">
+            {{
+              gearInsights.length === 0
+                ? (cmsError ? 'UNABLE TO REACH BASECAMP CMS' : 'NO GEAR REVIEWS PUBLISHED YET')
+                : 'NO GEAR REVIEWS MATCH CURRENT FILTER'
+            }}
+          </p>
           <p class="empty-sub font-serif">
-            Try searching for another item type (e.g. tent, stove, knife, pack) or reset the equipment filter.
+            {{
+              gearInsights.length === 0
+                ? (cmsError
+                    ? 'Long-term gear reports will load once CMS connectivity is restored.'
+                    : 'Long-term equipment field reports will appear here once published.')
+                : 'Try searching for another item type (e.g. tent, stove, knife, pack) or reset the equipment filter.'
+            }}
           </p>
           <button
             type="button"
@@ -811,7 +823,26 @@ async function copyLoadoutManifest() {
           </div>
 
           <!-- Categorized Master Equipment Inventory -->
-          <div class="kits-list">
+          <div v-if="filteredLockerCategories.length === 0" class="insights-empty-state font-mono">
+            <span class="material-symbols-outlined empty-icon">inventory_2</span>
+            <p class="empty-title">
+              {{
+                gearItems.length === 0
+                  ? (cmsError ? 'UNABLE TO REACH BASECAMP CMS' : 'NO EQUIPMENT ITEMS CATALOGED YET')
+                  : 'NO GEAR MATCHES CURRENT FILTER'
+              }}
+            </p>
+            <p class="empty-sub font-serif">
+              {{
+                gearItems.length === 0
+                  ? (cmsError
+                      ? 'Master locker inventory will sync when Basecamp CMS is online.'
+                      : 'Master locker equipment items will appear here once published.')
+                  : 'Try clearing your locker search or switching to ALL CATEGORIES.'
+              }}
+            </p>
+          </div>
+          <div v-else class="kits-list">
             <section
               v-for="cat in filteredLockerCategories"
               :key="cat.name"
@@ -1009,6 +1040,25 @@ async function copyLoadoutManifest() {
               >
                 <span class="material-symbols-outlined">chevron_right</span>
               </button>
+            </div>
+            <div v-else class="insights-empty-state font-mono">
+              <span class="material-symbols-outlined empty-icon">backpack</span>
+              <p class="empty-title">
+                {{
+                  loadoutKits.length === 0
+                    ? (cmsError ? 'UNABLE TO REACH BASECAMP CMS' : 'NO FIELD LOADOUTS PUBLISHED YET')
+                    : 'NO LOADOUTS MATCH SELECTED SEASON'
+                }}
+              </p>
+              <p class="empty-sub font-serif">
+                {{
+                  loadoutKits.length === 0
+                    ? (cmsError
+                        ? 'Expedition packing manifests will sync once CMS connectivity returns.'
+                        : 'Seasonal packing manifests will appear here once published.')
+                    : 'Select ALL SEASONS to view available packing manifests.'
+                }}
+              </p>
             </div>
           </div>
 

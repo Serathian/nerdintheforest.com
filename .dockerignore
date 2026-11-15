@@ -1,4 +1,5 @@
 node_modules
+.pnpm-store
 .output
 .nuxt
 dist
@@ -6,4 +7,3 @@ dist
 .gitignore
 .env
 .env.*
-pnpm-lock.yaml

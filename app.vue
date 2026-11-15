@@ -9,6 +9,20 @@ export interface ActiveInspection {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
+const siteUrl = ((config.public?.siteUrl as string) || 'https://nerdintheforest.com').replace(/\/$/, '')
+
+useHead(() => {
+  const canonical = `${siteUrl}${route.path}`
+  return {
+    link: [{ rel: 'canonical', href: canonical }],
+    meta: [
+      { property: 'og:site_name', content: 'Nerd in the Forest' },
+      { property: 'og:url', content: canonical },
+    ],
+  }
+})
+
 const activeInspection = useState<ActiveInspection | null>('activeDispatchInspection', () => null)
 
 watch(

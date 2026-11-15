@@ -1,20 +1,10 @@
-import { ref } from 'vue'
-import {
-  mockFieldNotes,
-  mockMapWaypoints,
-  mockLocations,
-  mockDispatches,
-  mockAreas,
-  type MockFieldNote,
-  type MockMapWaypoint,
-  type AmenityItem
+import { ref, type Ref } from 'vue'
+import type {
+  MockFieldNote,
+  MockMapWaypoint,
+  AmenityItem
 } from '../data/mockNordicTrail'
 import {
-  mockGearItems,
-  mockGearReviews,
-  mockLoadouts,
-  mockGearInsights,
-  mockLoadoutKits,
   convertGearItemsToCategories,
   convertLoadoutToKit,
   convertReviewToInsight,
@@ -37,97 +27,10 @@ import type {
   LoadoutItemStatus
 } from '../types/models'
 import { getLocationVisits, getAmenityMeta, calculateReadTime, getLocationMediaArchive } from '../utils/formatters'
-
-export interface CmsNitfPost {
-  id: string
-  title?: string
-  slug?: string
-  status?: 'draft' | 'published'
-  excerpt?: string
-  latitude?: number
-  longitude?: number
-  elevation?: number
-  visited_count?: number
-  amenities?: Array<string | { name?: string; icon?: string }>
-  createdAt?: string
-  areaId?: string
-  area?: string
-}
-
-export interface CmsNitfWaypoint {
-  id: string
-  name?: string
-  type?: string
-  latitude?: number
-  longitude?: number
-  elevation?: number
-  areaId?: string
-  area?: string
-}
+import { normalizeTrailGeometry } from '../utils/dispatchInspection'
 
 export type TransformedFieldNote = MockFieldNote
 export type TransformedMapWaypoint = MockMapWaypoint
-
-// Export both names for backwards compatibility and clarity
-export { mockFieldNotes, mockMapWaypoints }
-export const fallbackFieldNotes = mockFieldNotes
-export const fallbackMapWaypoints = mockMapWaypoints
-
-/**
- * Legacy transformer for backwards compatibility with tests and raw post feeds
- */
-export function transformPostToFieldNote(post: CmsNitfPost, index: number): TransformedFieldNote {
-  const numberTag = `#${String(index + 1).padStart(2, '0')} FIELD NOTE`
-  const elevationText = post.elevation ? `${post.elevation}m` : '480m'
-  const amenitiesList: AmenityItem[] = []
-
-  if (Array.isArray(post.amenities)) {
-    post.amenities.forEach(item => {
-      if (typeof item === 'string') {
-        amenitiesList.push({ icon: 'park', label: item })
-      } else if (item && typeof item === 'object') {
-        amenitiesList.push({
-          icon: item.icon || 'park',
-          label: item.name || 'Feature'
-        })
-      }
-    })
-  }
-
-  if (amenitiesList.length === 0) {
-    amenitiesList.push(
-      { icon: 'cabin', label: 'Shelter' },
-      { icon: 'water_drop', label: 'Spring' }
-    )
-  }
-
-  return {
-    id: post.id,
-    numberTag,
-    title: post.title || 'Untitled Dispatch',
-    areaId: post.areaId || 'nordmarka',
-    area: post.area || 'Nordmarka',
-    description: post.excerpt || 'Tactile backcountry survey note from the Nordic field.',
-    timeAgo: post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent',
-    visitedCount: post.visited_count ?? 1,
-    amenities: amenitiesList,
-    footerFeature: 'Surveyed spot',
-    footerIcon: 'explore',
-    metrics: `${elevationText} • GPS`,
-    latitude: post.latitude ?? 60.25,
-    longitude: post.longitude ?? 10.7167,
-    elevation: post.elevation ?? 480,
-    distanceKm: 1.5,
-    category: 'SHELTER',
-    slug: post.slug || post.id,
-    date: 'OCT 04, 2026 // 06:40 CET',
-    readTime: '3 MIN READ',
-    weather: '4°C • MIST',
-    heroImage: '',
-    content: [post.excerpt || 'Backcountry field note.'],
-    gallery: []
-  }
-}
 
 /**
  * Extracts plain-text paragraphs from Payload Lexical richText JSON, string arrays, or strings
@@ -358,7 +261,7 @@ export function transformCmsDispatch(doc: any): Dispatch {
   }
 
   const resolvedTrailGeometry: Array<[number, number]> | undefined =
-    doc.trail_geometry || doc.trailGeometry
+    normalizeTrailGeometry(doc.trail_geometry || doc.trailGeometry)
 
   return {
     id: slugStr,
@@ -587,7 +490,7 @@ async function fetchFromCms<T>(endpoint: string, base: string = '/api/cms'): Pro
   const fullUrl = `${normalizedBase}${normalizedEndpoint}`
 
   if (typeof $fetch !== 'undefined') {
-    return $fetch<T>(fullUrl)
+    return $fetch<T>(fullUrl) as Promise<T>
   }
 
   if (typeof fetch !== 'undefined') {
@@ -601,7 +504,7 @@ async function fetchFromCms<T>(endpoint: string, base: string = '/api/cms'): Pro
   throw new Error('No fetch implementation available')
 }
 
-function sharedRef<T>(key: string, init: () => T) {
+function sharedRef<T>(key: string, init: () => T): Ref<T> {
   try {
     if (typeof useState === 'function') {
       return useState<T>(key, init)
@@ -609,21 +512,21 @@ function sharedRef<T>(key: string, init: () => T) {
   } catch {
     // Outside Nuxt context (e.g. unit tests)
   }
-  return ref<T>(init()) as any
+  return ref<T>(init()) as Ref<T>
 }
 
 export function useNitfCms() {
-  const fieldNotes = sharedRef<TransformedFieldNote[]>('nitf-field-notes', () => fallbackFieldNotes)
-  const mapWaypoints = sharedRef<TransformedMapWaypoint[]>('nitf-map-waypoints', () => fallbackMapWaypoints)
-  const locations = sharedRef<Location[]>('nitf-locations', () => [...mockLocations])
-  const dispatches = sharedRef<Dispatch[]>('nitf-dispatches', () => [...mockDispatches])
-  const areas = sharedRef<Area[]>('nitf-areas', () => [...mockAreas])
-  const gearItems = sharedRef<GearItem[]>('nitf-gear-items', () => [...mockGearItems])
-  const gearReviews = sharedRef<GearReview[]>('nitf-gear-reviews', () => [...mockGearReviews])
-  const loadouts = sharedRef<Loadout[]>('nitf-loadouts', () => [...mockLoadouts])
-  const gearInsights = sharedRef<GearInsight[]>('nitf-gear-insights', () => [...mockGearInsights])
-  const loadoutKits = sharedRef<LoadoutKit[]>('nitf-loadout-kits', () => [...mockLoadoutKits])
-  const gearCategories = sharedRef<LoadoutCategory[]>('nitf-gear-categories', () => convertGearItemsToCategories(mockGearItems, mockGearReviews, mockLoadouts))
+  const fieldNotes = sharedRef<TransformedFieldNote[]>('nitf-field-notes', () => [])
+  const mapWaypoints = sharedRef<TransformedMapWaypoint[]>('nitf-map-waypoints', () => [])
+  const locations = sharedRef<Location[]>('nitf-locations', () => [])
+  const dispatches = sharedRef<Dispatch[]>('nitf-dispatches', () => [])
+  const areas = sharedRef<Area[]>('nitf-areas', () => [])
+  const gearItems = sharedRef<GearItem[]>('nitf-gear-items', () => [])
+  const gearReviews = sharedRef<GearReview[]>('nitf-gear-reviews', () => [])
+  const loadouts = sharedRef<Loadout[]>('nitf-loadouts', () => [])
+  const gearInsights = sharedRef<GearInsight[]>('nitf-gear-insights', () => [])
+  const loadoutKits = sharedRef<LoadoutKit[]>('nitf-loadout-kits', () => [])
+  const gearCategories = sharedRef<LoadoutCategory[]>('nitf-gear-categories', () => [])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -683,8 +586,8 @@ export function useNitfCms() {
         areas.value = data.docs.map(transformCmsArea)
         return { docs: areas.value }
       }
-    } catch {
-      // CMS error
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch areas from CMS'
     }
     return { docs: areas.value }
   }
@@ -759,11 +662,11 @@ export function useNitfCms() {
       await fetchPosts()
       const foundInCms = locations.value.find(l => l.slug === slug || l.id === slug)
       if (foundInCms) return foundInCms
-    } catch {
-      // Continue to fallback
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch locations from CMS'
     }
 
-    // 3. Fallback to in-memory / mock locations
+    // 3. Return previously fetched location if present, otherwise null
     return locations.value.find(l => l.slug === slug || l.id === slug) || null
   }
 
@@ -783,7 +686,7 @@ export function useNitfCms() {
         return transformed
       }
     } catch {
-      // Continue to fallback
+      // Specific slug query failed; try loading dispatches list
     }
 
     // 2. Fetch all dispatches from CMS
@@ -791,16 +694,12 @@ export function useNitfCms() {
       await fetchPosts()
       const found = dispatches.value.find(d => d.slug === slug || d.id === slug)
       if (found) return found
-    } catch {
-      // Continue
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch dispatches from CMS'
     }
 
-    // 3. Fallback to in-memory / mock dispatches
+    // 3. Return previously fetched dispatch if present, otherwise null
     return dispatches.value.find(d => d.slug === slug || d.id === slug) || null
-  }
-
-  async function fetchNearby(_lat: number, _lng: number, _radiusKm: number = 25) {
-    return { docs: fieldNotes.value }
   }
 
   function rebuildGearViews() {
@@ -818,8 +717,8 @@ export function useNitfCms() {
         rebuildGearViews()
         return { docs: gearItems.value }
       }
-    } catch {
-      // CMS error
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch gear items from CMS'
     }
     return { docs: gearItems.value }
   }
@@ -833,8 +732,8 @@ export function useNitfCms() {
         rebuildGearViews()
         return { docs: gearReviews.value }
       }
-    } catch {
-      // CMS error
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch gear reviews from CMS'
     }
     return { docs: gearReviews.value }
   }
@@ -848,8 +747,8 @@ export function useNitfCms() {
         rebuildGearViews()
         return { docs: loadouts.value }
       }
-    } catch {
-      // CMS error
+    } catch (e: any) {
+      error.value = e?.message || 'Could not fetch loadouts from CMS'
     }
     return { docs: loadouts.value }
   }
@@ -895,7 +794,6 @@ export function useNitfCms() {
     fetchWaypoints,
     fetchLocationBySlug,
     fetchDispatchBySlug,
-    fetchNearby,
     fetchGearItems,
     fetchGearReviews,
     fetchLoadouts,

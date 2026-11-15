@@ -1,18 +1,22 @@
 FROM node:22-alpine AS base
 
+FROM base AS pnpm-base
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
 # 1. Install dependencies
-FROM base AS deps
+FROM pnpm-base AS deps
 WORKDIR /app
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
-RUN npm install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
+RUN pnpm install --frozen-lockfile --prod=false
 
 # 2. Build production assets
-FROM base AS builder
+FROM pnpm-base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
-RUN npm run build
+RUN pnpm run build
 
 # 3. Production runner
 FROM base AS runner

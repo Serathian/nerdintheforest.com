@@ -157,7 +157,7 @@ function handleApply() {
                 Field Filters & Telemetry
               </h2>
               <p class="font-mono text-[9px] uppercase tracking-wider text-lichen-slate">
-                Nordmarka Waypoint Ledger
+                Nordic Waypoint Ledger
               </p>
             </div>
           </div>
