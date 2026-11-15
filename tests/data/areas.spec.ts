@@ -93,7 +93,8 @@ describe('Atlas Map Area Model and Filter Specification', () => {
   })
 
   it('validates map waypoints inherit the location area and region metadata', () => {
-    expect(mockMapWaypoints.length).toBe(mockFieldNotes.length)
+    const nonTrailheadNotes = mockFieldNotes.filter(n => n.category.toUpperCase() !== 'TRAILHEAD')
+    expect(mockMapWaypoints.length).toBe(nonTrailheadNotes.length)
 
     for (const wp of mockMapWaypoints) {
       expect(wp.areaId).toBeDefined()

@@ -54,7 +54,7 @@ await useAsyncData('nitf-atlas-cms', async () => {
 })
 
 const activeDispatchSlug = computed(() => {
-  return (route.query.dispatch as string) || (route.query.story as string) || activeDispatchInspection.value?.slug || ''
+  return (route.query.dispatch as string) || (route.query.story as string) || ''
 })
 
 const asyncFetchedDispatch = ref<any>(null)
@@ -544,6 +544,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  activeDispatchInspection.value = null
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleWindowResize)
   }

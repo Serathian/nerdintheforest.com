@@ -613,17 +613,17 @@ function sharedRef<T>(key: string, init: () => T) {
 }
 
 export function useNitfCms() {
-  const fieldNotes = sharedRef<TransformedFieldNote[]>('nitf-field-notes', () => [])
-  const mapWaypoints = sharedRef<TransformedMapWaypoint[]>('nitf-map-waypoints', () => [])
-  const locations = sharedRef<Location[]>('nitf-locations', () => [])
-  const dispatches = sharedRef<Dispatch[]>('nitf-dispatches', () => [])
-  const areas = sharedRef<Area[]>('nitf-areas', () => [])
-  const gearItems = sharedRef<GearItem[]>('nitf-gear-items', () => [])
-  const gearReviews = sharedRef<GearReview[]>('nitf-gear-reviews', () => [])
-  const loadouts = sharedRef<Loadout[]>('nitf-loadouts', () => [])
-  const gearInsights = sharedRef<GearInsight[]>('nitf-gear-insights', () => [])
-  const loadoutKits = sharedRef<LoadoutKit[]>('nitf-loadout-kits', () => [])
-  const gearCategories = sharedRef<LoadoutCategory[]>('nitf-gear-categories', () => [])
+  const fieldNotes = sharedRef<TransformedFieldNote[]>('nitf-field-notes', () => fallbackFieldNotes)
+  const mapWaypoints = sharedRef<TransformedMapWaypoint[]>('nitf-map-waypoints', () => fallbackMapWaypoints)
+  const locations = sharedRef<Location[]>('nitf-locations', () => [...mockLocations])
+  const dispatches = sharedRef<Dispatch[]>('nitf-dispatches', () => [...mockDispatches])
+  const areas = sharedRef<Area[]>('nitf-areas', () => [...mockAreas])
+  const gearItems = sharedRef<GearItem[]>('nitf-gear-items', () => [...mockGearItems])
+  const gearReviews = sharedRef<GearReview[]>('nitf-gear-reviews', () => [...mockGearReviews])
+  const loadouts = sharedRef<Loadout[]>('nitf-loadouts', () => [...mockLoadouts])
+  const gearInsights = sharedRef<GearInsight[]>('nitf-gear-insights', () => [...mockGearInsights])
+  const loadoutKits = sharedRef<LoadoutKit[]>('nitf-loadout-kits', () => [...mockLoadoutKits])
+  const gearCategories = sharedRef<LoadoutCategory[]>('nitf-gear-categories', () => convertGearItemsToCategories(mockGearItems, mockGearReviews, mockLoadouts))
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 

@@ -244,6 +244,14 @@ function toggleItemLoadouts(itemId: string | number) {
 function isItemLoadoutsExpanded(itemId: string | number): boolean {
   return Boolean(expandedItemLoadouts.value[String(itemId)])
 }
+
+function getCategoryWeightFormatted(items: any[]): string {
+  const grams = (items || []).reduce((sum, item) => sum + (Number(item.weightGrams) || 0), 0)
+  if (grams >= 1000) {
+    return `${(grams / 1000).toFixed(2)} KG`
+  }
+  return `${Math.round(grams)} G`
+}
 const lockerCategoryFilters = [
   { id: 'ALL', label: 'All Gear' },
   { id: 'PACKED', label: 'Packed' },
@@ -324,6 +332,7 @@ async function navigateToGearItem(gearItemId?: string) {
   activeMainTab.value = 'loadouts'
   gearSubMode.value = 'locker'
   selectedLockerCategory.value = 'ALL'
+  expandedItemLoadouts.value[String(gearItemId)] = true
   highlightedGearItemId.value = String(gearItemId)
   await nextTick()
   if (typeof document !== 'undefined') {
@@ -696,7 +705,7 @@ async function copyLoadoutManifest() {
       <!-- TAB 2: MY GEAR VIEW (EQUIPMENT LOCKER & MULTI-LOADOUT BROWSER)        -->
       <!-- ===================================================================== -->
       <main v-else-if="activeMainTab === 'loadouts'" class="loadouts-view">
-        <!-- Dual-Mode Switcher: Equipment Locker vs Field Loadouts Browser -->
+        <!-- Dual-Mode Segmented Switcher: Equipment Locker vs Field Loadouts -->
         <div class="gear-submode-bar font-mono" role="tablist" aria-label="My Gear View Mode">
           <button
             type="button"
@@ -727,53 +736,37 @@ async function copyLoadoutManifest() {
         <!-- SUB-MODE A: EQUIPMENT LOCKER (MASTER CATALOG & CATEGORY FILTER) -->
         <!-- =============================================================== -->
         <template v-if="gearSubMode === 'locker'">
-          <div class="insights-header-card locker-header-card">
-            <div class="insights-telemetry-banner">
-              <div class="banner-stat">
-                <span class="banner-stat-value font-mono">{{ totalLockerItemsCount }}</span>
-                <span class="banner-stat-label font-mono">GEAR ITEMS</span>
+          <div class="locker-controls-card">
+            <!-- Top Row: Search Bar + Concise Summary Pill -->
+            <div class="locker-search-row">
+              <div class="insight-search-bar locker-search-bar">
+                <span class="material-symbols-outlined search-icon">search</span>
+                <input
+                  v-model="lockerSearchQuery"
+                  type="search"
+                  class="insight-search-input font-mono"
+                  placeholder="Search gear by name, brand, or spec..."
+                  aria-label="Search equipment locker"
+                />
+                <button
+                  v-if="lockerSearchQuery"
+                  type="button"
+                  class="insight-search-clear"
+                  aria-label="Clear locker search"
+                  @click="lockerSearchQuery = ''"
+                >
+                  <span class="material-symbols-outlined text-[15px]">close</span>
+                </button>
               </div>
-              <div class="banner-divider" />
-              <div class="banner-stat">
-                <span class="banner-stat-value font-mono">{{ lockerTotalWeightKg }} <small class="text-[9px]">KG</small></span>
-                <span class="banner-stat-label font-mono">CATALOG WEIGHT</span>
-              </div>
-              <div class="banner-divider" />
-              <div class="banner-stat">
-                <span class="banner-stat-value font-mono text-secondary">{{ lockerReviewedCount }}</span>
-                <span class="banner-stat-label font-mono">REVIEWED</span>
-              </div>
-              <div class="banner-divider" />
-              <div class="banner-stat">
-                <span class="banner-stat-value font-mono">{{ loadoutKits.length }}</span>
-                <span class="banner-stat-label font-mono">FIELD KITS</span>
+
+              <div class="locker-summary-pill font-mono">
+                <strong>{{ totalLockerItemsCount }}</strong> ITEMS
+                <span class="pill-dot">•</span>
+                <strong>{{ lockerTotalWeightKg }}</strong> KG
               </div>
             </div>
 
-            <div class="header-card-divider" />
-
-            <!-- Search Bar for Equipment Locker -->
-            <div class="insight-search-bar">
-              <span class="material-symbols-outlined search-icon">search</span>
-              <input
-                v-model="lockerSearchQuery"
-                type="search"
-                class="insight-search-input font-mono"
-                placeholder="Search equipment locker by item, brand, or type (e.g. tent, stove, tool)..."
-                aria-label="Search equipment locker"
-              />
-              <button
-                v-if="lockerSearchQuery"
-                type="button"
-                class="insight-search-clear"
-                aria-label="Clear locker search"
-                @click="lockerSearchQuery = ''"
-              >
-                <span class="material-symbols-outlined text-[15px]">close</span>
-              </button>
-            </div>
-
-            <!-- Category Filter Chips with Subtle Edge Fade & Whisper Chevron -->
+            <!-- Category Filter Chips -->
             <div class="filter-scroll-shell">
               <button
                 v-if="lockerScrollPos !== 'start'"
@@ -829,9 +822,12 @@ async function copyLoadoutManifest() {
                   <span class="category-indicator" />
                   <h3 class="category-title">{{ cat.name }}</h3>
                 </div>
-                <span class="category-item-count">
-                  {{ cat.items.length }} {{ cat.items.length === 1 ? 'ITEM' : 'ITEMS' }}
-                </span>
+                <div class="category-header-right">
+                  <span class="category-weight-badge">{{ getCategoryWeightFormatted(cat.items) }}</span>
+                  <span class="category-item-count">
+                    {{ cat.items.length }} {{ cat.items.length === 1 ? 'ITEM' : 'ITEMS' }}
+                  </span>
+                </div>
               </div>
 
               <div class="items-table">
@@ -839,63 +835,71 @@ async function copyLoadoutManifest() {
                   v-for="item in cat.items"
                   :id="`gear-item-${item.id}`"
                   :key="item.id"
-                  :class="['gear-item-row', { 'gear-item-highlighted': highlightedGearItemId === String(item.id) }]"
+                  :class="[
+                    'gear-item-row is-interactive',
+                    {
+                      'gear-item-highlighted': highlightedGearItemId === String(item.id),
+                      'is-expanded': isItemLoadoutsExpanded(item.id)
+                    }
+                  ]"
+                  role="button"
+                  tabindex="0"
+                  :aria-expanded="isItemLoadoutsExpanded(item.id)"
+                  @click="toggleItemLoadouts(item.id)"
+                  @keydown.enter.prevent="toggleItemLoadouts(item.id)"
+                  @keydown.space.prevent="toggleItemLoadouts(item.id)"
                 >
-                  <div class="item-primary">
-                    <div class="item-name-row">
-                      <span class="item-name font-serif">{{ item.name }}</span>
-                      <span
-                        v-if="item.loadouts && item.loadouts.length > 0"
-                        class="status-chip font-mono packed"
-                      >
-                        PACKED
-                      </span>
-                    </div>
-                    <div class="item-spec font-mono">{{ item.spec }}</div>
-                    <p class="item-note font-serif">{{ item.note }}</p>
-
-                    <!-- Compact Collapsible Loadouts & Reviews Bar -->
-                    <div
-                      v-if="(item.loadouts && item.loadouts.length > 0) || getInsightsForItem(item).length > 1"
-                      class="item-linked-loadouts"
-                    >
-                      <div class="compact-badges-bar">
-                        <button
+                  <div class="gear-row-main">
+                    <div class="item-primary">
+                      <div class="item-name-row">
+                        <span class="item-name font-serif">{{ item.name }}</span>
+                        <span
                           v-if="item.loadouts && item.loadouts.length > 0"
-                          type="button"
-                          :class="['loadout-collapse-toggle font-mono', { active: isItemLoadoutsExpanded(item.id) }]"
-                          :aria-expanded="isItemLoadoutsExpanded(item.id)"
-                          @click="toggleItemLoadouts(item.id)"
+                          class="status-chip font-mono packed"
                         >
-                          <span class="material-symbols-outlined icon-xs text-secondary">backpack</span>
-                          <span>
-                            PACKED IN {{ item.loadouts.length }} {{ item.loadouts.length === 1 ? 'LOADOUT' : 'LOADOUTS' }}
-                          </span>
-                          <span
-                            :class="['material-symbols-outlined chevron-xs', { rotated: isItemLoadoutsExpanded(item.id) }]"
-                          >
-                            expand_more
-                          </span>
-                        </button>
+                          IN {{ item.loadouts.length }} {{ item.loadouts.length === 1 ? 'KIT' : 'KITS' }}
+                        </span>
+                      </div>
+                      <div class="item-spec font-mono">{{ item.spec }}</div>
+                    </div>
 
-                        <button
-                          v-for="rev in (getInsightsForItem(item).length > 1 ? getInsightsForItem(item) : [])"
-                          :key="rev.id"
-                          type="button"
-                          class="linked-review-pill font-mono"
-                          @click="openInsight(rev)"
-                        >
-                          <span class="pill-topic">{{ rev.category }}</span>
-                          <span class="pill-sep">//</span>
-                          <span class="pill-title">{{ rev.title }}</span>
-                          <span class="material-symbols-outlined icon-xs">arrow_outward</span>
-                        </button>
+                    <div class="item-side">
+                      <button
+                        v-if="getInsightsForItem(item).length > 0"
+                        type="button"
+                        class="review-quick-btn font-mono"
+                        title="Read field review"
+                        @click.stop="openReviewForItem(item)"
+                      >
+                        <span class="material-symbols-outlined text-[13px]">rate_review</span>
+                        <span>{{ getInsightsForItem(item).length > 1 ? `${getInsightsForItem(item).length} REVIEWS` : 'REVIEW' }}</span>
+                      </button>
+
+                      <div class="item-weight font-mono">
+                        {{ item.weight }}
                       </div>
 
-                      <div
-                        v-if="item.loadouts && item.loadouts.length > 0 && isItemLoadoutsExpanded(item.id)"
-                        class="linked-loadouts-chips"
+                      <span
+                        :class="['material-symbols-outlined row-expand-chevron', { rotated: isItemLoadoutsExpanded(item.id) }]"
                       >
+                        expand_more
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Progressive Disclosure: Expanded Field Notes, Loadout Links & Reviews -->
+                  <div
+                    v-if="isItemLoadoutsExpanded(item.id)"
+                    class="item-expanded-drawer"
+                    @click.stop
+                  >
+                    <p v-if="item.note" class="item-note font-serif">
+                      {{ item.note }}
+                    </p>
+
+                    <div class="expanded-actions-row">
+                      <template v-if="item.loadouts && item.loadouts.length > 0">
+                        <span class="expanded-meta-label font-mono">PACKED IN:</span>
                         <button
                           v-for="ld in item.loadouts"
                           :key="ld.id"
@@ -909,32 +913,22 @@ async function copyLoadoutManifest() {
                           <span class="pill-title">{{ ld.title }}</span>
                           <span class="material-symbols-outlined icon-xs">arrow_forward</span>
                         </button>
-                      </div>
-                    </div>
-                  </div>
+                      </template>
 
-                  <div class="item-side">
-                    <div class="item-weight font-mono">
-                      {{ item.weight }}
+                      <button
+                        v-for="rev in getInsightsForItem(item)"
+                        :key="rev.id"
+                        type="button"
+                        class="linked-review-pill font-mono"
+                        @click="openInsight(rev)"
+                      >
+                        <span class="material-symbols-outlined icon-xs text-secondary">rate_review</span>
+                        <span class="pill-topic">{{ rev.category }}</span>
+                        <span class="pill-sep">·</span>
+                        <span class="pill-title">{{ rev.title }}</span>
+                        <span class="material-symbols-outlined icon-xs">arrow_outward</span>
+                      </button>
                     </div>
-                    <button
-                      v-if="getInsightsForItem(item).length === 1"
-                      type="button"
-                      class="read-action font-mono"
-                      title="Read field review & observations"
-                      @click="openReviewForItem(item)"
-                    >
-                      READ REVIEW <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>
-                    </button>
-                    <button
-                      v-else-if="getInsightsForItem(item).length > 1"
-                      type="button"
-                      class="read-action font-mono"
-                      title="View all reviews for this gear item"
-                      @click="openReviewForItem(item)"
-                    >
-                      {{ getInsightsForItem(item).length }} REVIEWS <span class="material-symbols-outlined" style="font-size: 14px;">arrow_forward</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -946,32 +940,22 @@ async function copyLoadoutManifest() {
         <!-- SUB-MODE B: FIELD LOADOUTS BROWSER (MULTIPLE KITS PER SEASON)   -->
         <!-- =============================================================== -->
         <template v-else>
-          <!-- Season Filter + Multi-Loadout Browser -->
+          <!-- Streamlined Season Filter + Kit Selector Card -->
           <div class="season-selector-widget">
-            <div class="season-selector-header font-mono">
-              <span class="selector-header-title">
-                <span class="selector-beacon" />
-                <span>FILTER LOADOUTS BY SEASON</span>
-              </span>
-              <span class="selector-header-active text-secondary">
-                {{ filteredLoadoutKits.length }} {{ filteredLoadoutKits.length === 1 ? 'LOADOUT' : 'LOADOUTS' }}
-              </span>
-            </div>
-
-            <!-- Season Filter Buttons -->
-            <div class="season-selector-buttons" role="radiogroup" aria-label="Filter loadouts by season">
+            <!-- Compact Inline Season Pills -->
+            <div class="season-pills-bar font-mono" role="radiogroup" aria-label="Filter loadouts by season">
               <button
                 v-for="s in loadoutSeasonFilters"
                 :key="s.id"
-                :class="['season-value-node font-mono', { active: selectedLoadoutSeason === s.id }]"
+                :class="['season-pill-btn', { active: selectedLoadoutSeason === s.id }]"
                 type="button"
                 role="radio"
                 :aria-checked="selectedLoadoutSeason === s.id"
                 @click="selectLoadoutSeason(s.id)"
               >
-                <span class="material-symbols-outlined value-icon">{{ s.icon }}</span>
-                <span class="value-name">{{ s.name }}</span>
-                <span class="value-sub font-mono">{{ getLoadoutCountBySeason(s.id) }} KITS</span>
+                <span class="material-symbols-outlined season-pill-icon">{{ s.icon }}</span>
+                <span>{{ s.name }}</span>
+                <span class="season-pill-count">{{ getLoadoutCountBySeason(s.id) }}</span>
               </button>
             </div>
 
@@ -1010,15 +994,9 @@ async function copyLoadoutManifest() {
                   </div>
                   <div class="loadout-card-title font-serif">{{ kit.title }}</div>
                   <div class="loadout-card-meta font-mono">
-                    <span>{{ kit.baseWeightKg.toFixed(2) }} KG</span>
+                    <strong>{{ kit.baseWeightKg.toFixed(2) }} KG</strong>
                     <span>•</span>
-                    <span>{{ getKitItemsCount(kit) }} PCS</span>
-                    <template v-if="kit.dispatches && kit.dispatches.length > 0">
-                      <span>•</span>
-                      <span class="text-secondary">
-                        {{ kit.dispatches.length }} {{ kit.dispatches.length === 1 ? 'TRIP' : 'TRIPS' }}
-                      </span>
-                    </template>
+                    <span>{{ getKitItemsCount(kit) }} ITEMS</span>
                   </div>
                 </button>
               </div>
@@ -1034,12 +1012,16 @@ async function copyLoadoutManifest() {
             </div>
           </div>
 
-          <!-- Active Loadout Manifest Card -->
-          <div v-if="activeLoadout" class="manifest-card">
+          <!-- High-Contrast Dark Pine Active Loadout Hero Banner -->
+          <div v-if="activeLoadout" class="manifest-hero-card">
             <div class="manifest-top-meta">
-              <div>
+              <div class="manifest-title-block">
+                <div class="manifest-kicker font-mono">
+                  <span class="kicker-season-badge">{{ activeLoadout.season }}</span>
+                  <span class="kicker-sep">•</span>
+                  <span>{{ activeLoadout.subtitle }}</span>
+                </div>
                 <h2 class="manifest-title font-serif">{{ activeLoadout.title }}</h2>
-                <p class="manifest-subtitle font-mono">{{ activeLoadout.subtitle }}</p>
               </div>
               <button
                 class="copy-manifest-btn font-mono"
@@ -1047,48 +1029,37 @@ async function copyLoadoutManifest() {
                 title="Copy markdown packing manifest to clipboard"
                 @click="copyLoadoutManifest"
               >
-                <span class="material-symbols-outlined text-[15px]">content_copy</span>
+                <span class="material-symbols-outlined text-[14px]">content_copy</span>
                 <span>{{ copyNotification ? 'COPIED!' : 'EXPORT' }}</span>
               </button>
             </div>
 
-            <div class="manifest-stats-grid font-mono">
-              <div class="manifest-stat">
+            <div class="manifest-stats-strip font-mono">
+              <div class="manifest-stat-item">
                 <span class="stat-label">BASE WEIGHT</span>
-                <span class="stat-value">{{ activeLoadout.baseWeightKg.toFixed(2) }} <span class="stat-unit">KG</span></span>
+                <span class="stat-value">{{ activeLoadout.baseWeightKg.toFixed(2) }} <small>KG</small></span>
               </div>
-              <div class="manifest-divider" />
-              <div class="manifest-stat">
-                <span class="stat-label">TOTAL ITEMS</span>
-                <span class="stat-value">{{ totalPackedItems }} <span class="stat-unit">PCS</span></span>
+              <div class="manifest-stat-sep" />
+              <div class="manifest-stat-item">
+                <span class="stat-label">PACKED ITEMS</span>
+                <span class="stat-value">{{ totalPackedItems }} <small>PCS</small></span>
               </div>
-              <div class="manifest-divider" />
-              <div class="manifest-stat">
-                <span class="stat-label">TEMP LIMIT</span>
-                <span class="stat-value text-secondary">{{ activeLoadout.tempRange }}</span>
+              <div class="manifest-stat-sep" />
+              <div class="manifest-stat-item">
+                <span class="stat-label">TEMP RATING</span>
+                <span class="stat-value accent">{{ activeLoadout.tempRange }}</span>
               </div>
-              <div class="manifest-divider" />
-              <div class="manifest-stat">
-                <span class="stat-label">SEASON</span>
-                <span class="stat-value text-success">{{ activeLoadout.season }}</span>
-              </div>
-            </div>
-
-            <!-- Terrain Stamp -->
-            <div class="terrain-stamp font-mono">
-              <span class="material-symbols-outlined text-[13px] text-secondary">terrain</span>
-              <span>TERRAIN: {{ activeLoadout.terrain }}</span>
             </div>
 
             <!-- Field Dispatches Where This Loadout Was Carried -->
             <div
               v-if="activeLoadout.dispatches && activeLoadout.dispatches.length > 0"
-              class="loadout-dispatches-box font-mono"
+              class="manifest-dispatches-row font-mono"
             >
-              <div class="loadout-dispatches-header">
-                <span class="material-symbols-outlined text-[14px] text-secondary">hiking</span>
-                <span>CARRIED ON FIELD DISPATCHES ({{ activeLoadout.dispatches.length }})</span>
-              </div>
+              <span class="dispatches-row-label">
+                <span class="material-symbols-outlined text-[13px]">hiking</span>
+                <span>FIELD TESTED ON:</span>
+              </span>
               <div class="loadout-dispatches-links">
                 <NuxtLink
                   v-for="disp in activeLoadout.dispatches"
@@ -1097,7 +1068,7 @@ async function copyLoadoutManifest() {
                   class="loadout-dispatch-link"
                 >
                   <span class="font-serif">{{ disp.title }}</span>
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                  <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
                 </NuxtLink>
               </div>
             </div>
@@ -1115,65 +1086,99 @@ async function copyLoadoutManifest() {
                   <span class="category-indicator" />
                   <h3 class="category-title">{{ cat.name }}</h3>
                 </div>
-                <span class="category-item-count">
-                  {{ cat.items.length }} {{ cat.items.length === 1 ? 'ITEM' : 'ITEMS' }}
-                </span>
+                <div class="category-header-right">
+                  <span class="category-weight-badge">{{ getCategoryWeightFormatted(cat.items) }}</span>
+                  <span class="category-item-count">
+                    {{ cat.items.length }} {{ cat.items.length === 1 ? 'ITEM' : 'ITEMS' }}
+                  </span>
+                </div>
               </div>
 
               <div class="items-table">
                 <div
                   v-for="item in cat.items"
                   :key="item.id"
-                  class="gear-item-row"
+                  :class="['gear-item-row is-interactive', { 'is-expanded': isItemLoadoutsExpanded(`kit-${activeLoadout.id}-${item.id}`) }]"
+                  role="button"
+                  tabindex="0"
+                  :aria-expanded="isItemLoadoutsExpanded(`kit-${activeLoadout.id}-${item.id}`)"
+                  @click="toggleItemLoadouts(`kit-${activeLoadout.id}-${item.id}`)"
+                  @keydown.enter.prevent="toggleItemLoadouts(`kit-${activeLoadout.id}-${item.id}`)"
+                  @keydown.space.prevent="toggleItemLoadouts(`kit-${activeLoadout.id}-${item.id}`)"
                 >
-                  <div class="item-primary">
-                    <div class="item-name-row">
-                      <span class="item-name font-serif">{{ item.name }}</span>
-                      <span
-                        v-if="item.status"
-                        :class="['status-chip font-mono', item.status.toLowerCase()]"
-                      >
-                        {{ item.status }}
-                      </span>
-                    </div>
-                    <div class="item-spec font-mono">{{ item.spec }}</div>
-                    <p class="item-note font-serif">{{ item.note }}</p>
-
-                    <!-- Linked Reviews List (compact inline pills) -->
-                    <div
-                      v-if="getInsightsForItem(item).length > 0"
-                      class="item-linked-reviews"
-                    >
-                      <div class="linked-reviews-pills">
-                        <button
-                          v-for="rev in getInsightsForItem(item)"
-                          :key="rev.id"
-                          type="button"
-                          class="linked-review-pill font-mono"
-                          @click="openInsight(rev)"
+                  <div class="gear-row-main">
+                    <div class="item-primary">
+                      <div class="item-name-row">
+                        <span class="item-name font-serif">{{ item.name }}</span>
+                        <span
+                          v-if="item.status && item.status !== 'PACKED'"
+                          :class="['status-chip font-mono', item.status.toLowerCase()]"
                         >
-                          <span class="material-symbols-outlined icon-xs text-secondary">rate_review</span>
-                          <span class="pill-topic">{{ rev.category }}</span>
-                          <span class="pill-sep">·</span>
-                          <span class="pill-title">{{ rev.title }}</span>
-                          <span class="material-symbols-outlined icon-xs">arrow_outward</span>
-                        </button>
+                          {{ item.status }}
+                        </span>
                       </div>
+                      <div class="item-spec font-mono">{{ item.spec }}</div>
+                    </div>
+
+                    <div class="item-side">
+                      <button
+                        v-if="getInsightsForItem(item).length > 0"
+                        type="button"
+                        class="review-quick-btn font-mono"
+                        title="Read field review"
+                        @click.stop="openReviewForItem(item)"
+                      >
+                        <span class="material-symbols-outlined text-[13px]">rate_review</span>
+                        <span>REVIEW</span>
+                      </button>
+
+                      <div class="item-weight font-mono">
+                        {{ item.weight }}
+                      </div>
+
+                      <span
+                        :class="['material-symbols-outlined row-expand-chevron', { rotated: isItemLoadoutsExpanded(`kit-${activeLoadout.id}-${item.id}`) }]"
+                      >
+                        expand_more
+                      </span>
                     </div>
                   </div>
 
-                  <div class="item-side">
-                    <div class="item-weight font-mono">
-                      {{ item.weight }}
+                  <!-- Progressive Disclosure: Note, Review Pills, & Locker Link -->
+                  <div
+                    v-if="isItemLoadoutsExpanded(`kit-${activeLoadout.id}-${item.id}`)"
+                    class="item-expanded-drawer"
+                    @click.stop
+                  >
+                    <p v-if="item.note" class="item-note font-serif">
+                      {{ item.note }}
+                    </p>
+
+                    <div class="expanded-actions-row">
+                      <button
+                        type="button"
+                        class="linked-loadout-chip font-mono"
+                        title="Locate in Equipment Locker"
+                        @click="navigateToGearItem(item.id)"
+                      >
+                        <span class="material-symbols-outlined icon-xs">inventory_2</span>
+                        <span>VIEW IN EQUIPMENT LOCKER</span>
+                      </button>
+
+                      <button
+                        v-for="rev in getInsightsForItem(item)"
+                        :key="rev.id"
+                        type="button"
+                        class="linked-review-pill font-mono"
+                        @click="openInsight(rev)"
+                      >
+                        <span class="material-symbols-outlined icon-xs text-secondary">rate_review</span>
+                        <span class="pill-topic">{{ rev.category }}</span>
+                        <span class="pill-sep">·</span>
+                        <span class="pill-title">{{ rev.title }}</span>
+                        <span class="material-symbols-outlined icon-xs">arrow_outward</span>
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      class="read-action font-mono"
-                      title="Locate in Equipment Locker"
-                      @click="navigateToGearItem(item.id)"
-                    >
-                      IN LOCKER <span class="material-symbols-outlined" style="font-size: 14px;">inventory_2</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1846,466 +1851,17 @@ async function copyLoadoutManifest() {
 }
 
 /* ========================================================================= */
-/* TAB 2: STYLIZED 4-STOP SEASONAL SELECTOR SLIDER                           */
-/* Precision field instrument slide selector with discrete station detents   */
-/* ========================================================================= */
-.season-selector-widget {
-  background-color: var(--color-surface-container-low);
-  border: 1px solid rgba(115, 120, 116, 0.35);
-  border-radius: 8px;
-  padding: 12px 14px 12px;
-  margin-bottom: 18px;
-  box-shadow: 0 1px 4px rgba(27, 46, 36, 0.04);
-}
-
-.season-selector-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-size: 9.5px;
-  font-weight: 700;
-}
-
-.selector-header-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-on-surface-variant);
-  letter-spacing: 0.08em;
-}
-
-.selector-beacon {
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-  box-shadow: 0 0 5px rgba(217, 83, 30, 0.6);
-}
-
-.selector-header-active {
-  color: var(--color-secondary);
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-/* 5 FILTER BUTTONS (ALL GEAR + 4 SEASONS) */
-.season-selector-buttons {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
-}
-
-@media (max-width: 480px) {
-  .season-selector-buttons {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.season-value-node {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(238, 223, 197, 0.2);
-  border: 1px solid rgba(115, 120, 116, 0.25);
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 10px 6px;
-  color: #556057;
-  user-select: none;
-  transition: all 0.18s ease;
-  position: relative;
-}
-
-.season-value-node:hover:not(.active) {
-  color: var(--color-primary);
-  background-color: rgba(238, 223, 197, 0.45);
-  border-color: rgba(115, 120, 116, 0.4);
-}
-
-.season-value-node.active {
-  background-color: #ffffff;
-  border-color: var(--color-secondary);
-  box-shadow: 0 1px 4px rgba(27, 46, 36, 0.1);
-}
-
-.value-icon {
-  font-size: 20px;
-  line-height: 1;
-  color: #647066;
-  margin-bottom: 4px;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
-}
-
-.season-value-node:hover:not(.active) .value-icon {
-  color: var(--color-primary);
-  transform: translateY(-1px);
-}
-
-.season-value-node.active .value-icon {
-  color: var(--color-secondary);
-  transform: translateY(-1px) scale(1.08);
-}
-
-.value-name {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: inherit;
-  line-height: 1.1;
-}
-
-.season-value-node.active .value-name {
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.value-sub {
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--color-lichen-slate);
-  margin-top: 2px;
-  line-height: 1;
-}
-
-.season-value-node.active .value-sub {
-  color: var(--color-secondary);
-  font-weight: 700;
-}
-
-.manifest-top-meta {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.manifest-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-primary);
-  line-height: 1.25;
-}
-
-.manifest-subtitle {
-  font-size: 10px;
-  color: var(--color-on-surface-variant);
-  margin-top: 2px;
-}
-
-.copy-manifest-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  background-color: var(--color-surface-container-high);
-  border: 1px solid rgba(115, 120, 116, 0.35);
-  color: var(--color-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.copy-manifest-btn:hover {
-  background-color: var(--color-primary);
-  color: #ffffff;
-}
-
-.manifest-stats-grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  background-color: var(--color-surface-container-low);
-  border: 1px solid rgba(115, 120, 116, 0.2);
-  border-radius: 6px;
-  padding: 10px 4px;
-}
-
-.manifest-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.stat-label {
-  font-size: 8px;
-  color: var(--color-on-surface-variant);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.stat-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--color-primary);
-}
-
-.stat-unit {
-  font-size: 8px;
-  color: var(--color-secondary);
-}
-
-.manifest-divider {
-  width: 1px;
-  height: 20px;
-  background-color: rgba(115, 120, 116, 0.25);
-}
-
-.terrain-stamp {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: var(--color-on-surface-variant);
-  background-color: var(--color-surface-container);
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px dashed rgba(115, 120, 116, 0.3);
-}
-
-.kits-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.kit-category-section {
-  background-color: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: var(--color-card-shadow);
-}
-
-.category-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background-color: var(--color-surface-container);
-  border-bottom: 1px solid rgba(115, 120, 116, 0.25);
-}
-
-.category-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.category-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-}
-
-.category-title {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-}
-
-.category-item-count {
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--color-lichen-slate);
-}
-
-.items-table {
-  display: flex;
-  flex-direction: column;
-}
-
-.gear-item-row {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(115, 120, 116, 0.15);
-  gap: 16px;
-}
-
-.gear-item-row:last-child {
-  border-bottom: none;
-}
-
-.gear-item-row.gear-item-highlighted {
-  background-color: rgba(217, 83, 30, 0.1);
-  box-shadow: inset 3px 0 0 var(--color-secondary);
-  transition: background-color 0.4s ease;
-}
-
-.item-linked-reviews {
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.linked-reviews-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--color-lichen-slate);
-}
-
-.linked-reviews-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.linked-review-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
-  background: rgba(238, 223, 197, 0.3);
-  border: 1px solid rgba(115, 120, 116, 0.25);
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 8.5px;
-  line-height: 1.2;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.linked-review-pill:hover {
-  border-color: var(--color-secondary);
-  background: rgba(217, 83, 30, 0.08);
-  color: var(--color-secondary);
-}
-
-.pill-topic {
-  font-weight: 700;
-  color: var(--color-secondary);
-  flex-shrink: 0;
-}
-
-.pill-sep {
-  opacity: 0.45;
-  flex-shrink: 0;
-}
-
-.pill-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.item-primary {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.item-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.item-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.item-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.status-chip {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.status-chip.packed {
-  background-color: rgba(4, 120, 87, 0.12);
-  color: #047857;
-  border: 1px solid rgba(4, 120, 87, 0.3);
-}
-
-.status-chip.essential {
-  background-color: rgba(217, 83, 30, 0.12);
-  color: var(--color-secondary);
-  border: 1px solid rgba(217, 83, 30, 0.3);
-}
-
-.status-chip.ready {
-  background-color: rgba(66, 72, 68, 0.12);
-  color: var(--color-on-surface-variant);
-  border: 1px solid rgba(66, 72, 68, 0.3);
-}
-
-.item-spec {
-  font-size: 10px;
-  color: var(--color-on-surface-variant);
-}
-
-.item-note {
-  font-size: 12px;
-  color: rgba(66, 72, 68, 0.85);
-  line-height: 1.4;
-  margin-top: 2px;
-}
-
-.item-weight {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-primary);
-  white-space: nowrap;
-  background-color: rgba(231, 226, 214, 0.5);
-  padding: 3px 6px;
-  border-radius: 4px;
-}
-
-.text-success {
-  color: #047857;
-}
-
-.text-secondary {
-  color: var(--color-secondary);
-}
-
-/* ========================================================================= */
-/* MY GEAR DUAL-MODE SWITCHER & MULTI-LOADOUT BROWSER                        */
+/* TAB 2: MY GEAR — STREAMLINED HIGH-CONTRAST LOCKER & LOADOUT ARCHITECTURE  */
 /* ========================================================================= */
 .gear-submode-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 12px 14px 4px;
+  gap: 6px;
+  padding: 5px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background-color: #dfd7c5;
+  border: 1px solid rgba(27, 46, 36, 0.22);
 }
 
 .gear-submode-btn {
@@ -2315,130 +1871,176 @@ async function copyLoadoutManifest() {
   gap: 7px;
   padding: 10px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(115, 120, 116, 0.35);
-  background-color: var(--color-surface-container-low);
-  color: var(--color-on-surface-variant);
-  font-size: 10.5px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: #35443b;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.16s ease;
 }
 
 .gear-submode-btn:hover:not(.active) {
-  background-color: var(--color-surface-container);
-  color: var(--color-primary);
-  border-color: rgba(115, 120, 116, 0.5);
+  background-color: rgba(255, 255, 255, 0.55);
+  color: #111f18;
 }
 
 .gear-submode-btn.active {
-  background-color: var(--color-primary);
+  background-color: #1b2e24;
   color: #ffffff;
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 6px rgba(27, 46, 36, 0.15);
+  border-color: #1b2e24;
+  box-shadow: 0 2px 8px rgba(27, 46, 36, 0.22);
 }
 
 .submode-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
+  min-width: 20px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 9999px;
-  font-size: 9px;
-  background-color: rgba(27, 46, 36, 0.1);
+  font-size: 9.5px;
+  font-weight: 700;
+  background-color: rgba(27, 46, 36, 0.12);
   color: inherit;
 }
 
 .gear-submode-btn.active .submode-count {
-  background-color: var(--color-secondary);
+  background-color: #d9531e;
   color: #ffffff;
 }
 
-.locker-header-card {
-  margin-top: 8px;
-}
-
-.item-linked-loadouts {
-  margin-top: 4px;
+/* LOCKER COMPACT CONTROLS CARD */
+.locker-controls-card {
+  background-color: #ffffff;
+  border: 1.5px solid rgba(27, 46, 36, 0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px rgba(27, 46, 36, 0.06);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
 }
 
-.compact-badges-bar {
+.locker-search-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 8px;
 }
 
-.loadout-collapse-toggle {
+.locker-search-bar {
+  flex: 1 1 auto;
+  background-color: #f6f2e9;
+  border-color: rgba(27, 46, 36, 0.24);
+}
+
+.locker-summary-pill {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 8.5px;
+  gap: 5px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 6px;
+  background-color: #1b2e24;
+  color: #e8e2d5;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.locker-summary-pill strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.locker-summary-pill .pill-dot {
+  color: #d9531e;
+}
+
+@media (max-width: 480px) {
+  .locker-search-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .locker-summary-pill {
+    justify-content: center;
+    height: 30px;
+  }
+}
+
+/* STREAMLINED SEASON FILTER + LOADOUT SELECTOR */
+.season-selector-widget {
+  background-color: #ffffff;
+  border: 1.5px solid rgba(27, 46, 36, 0.2);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(27, 46, 36, 0.06);
+}
+
+.season-pills-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.season-pill-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 9999px;
+  border: 1px solid rgba(27, 46, 36, 0.22);
+  background-color: #f5f0e5;
+  color: #2f3e35;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  line-height: 1.2;
-  background-color: rgba(27, 46, 36, 0.05);
-  border: 1px solid rgba(115, 120, 116, 0.28);
-  color: var(--color-on-surface-variant);
+  text-transform: uppercase;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.loadout-collapse-toggle:hover,
-.loadout-collapse-toggle.active {
-  background-color: rgba(27, 46, 36, 0.1);
+.season-pill-btn:hover:not(.active) {
+  background-color: #ebe3d2;
   border-color: rgba(27, 46, 36, 0.45);
-  color: var(--color-primary);
+  color: #111f18;
 }
 
-.icon-xs {
-  font-size: 11px;
-  line-height: 1;
+.season-pill-btn.active {
+  background-color: #1b2e24;
+  border-color: #1b2e24;
+  color: #ffffff;
 }
 
-.chevron-xs {
-  font-size: 12px;
-  line-height: 1;
-  transition: transform 0.18s ease;
+.season-pill-icon {
+  font-size: 14px;
+  color: #d9531e;
 }
 
-.chevron-xs.rotated {
-  transform: rotate(180deg);
+.season-pill-btn.active .season-pill-icon {
+  color: #ff7a45;
 }
 
-.linked-loadouts-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.season-pill-count {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 9999px;
+  background-color: rgba(27, 46, 36, 0.1);
+  color: inherit;
 }
 
-.linked-loadout-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(27, 46, 36, 0.05);
-  border: 1px solid rgba(27, 46, 36, 0.2);
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 8.5px;
-  line-height: 1.2;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.15s ease;
-}
-
-.linked-loadout-chip:hover {
-  border-color: var(--color-secondary);
-  background: rgba(217, 83, 30, 0.08);
-  color: var(--color-secondary);
+.season-pill-btn.active .season-pill-count {
+  background-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .loadout-cards-scroll-shell {
@@ -2447,7 +2049,7 @@ async function copyLoadoutManifest() {
   align-items: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(115, 120, 116, 0.2);
+  border-top: 1px solid rgba(27, 46, 36, 0.12);
 }
 
 .loadout-browser-cards {
@@ -2463,31 +2065,31 @@ async function copyLoadoutManifest() {
 }
 
 .loadout-browser-card {
-  flex: 0 0 205px;
-  width: 205px;
+  flex: 0 0 210px;
+  width: 210px;
   scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 4px;
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: 6px;
-  border: 1px solid rgba(115, 120, 116, 0.3);
-  background-color: rgba(255, 255, 255, 0.65);
+  border: 1.5px solid rgba(27, 46, 36, 0.18);
+  background-color: #f8f4ec;
   cursor: pointer;
   transition: all 0.16s ease;
 }
 
 .loadout-browser-card:hover:not(.active) {
   background-color: #ffffff;
-  border-color: rgba(115, 120, 116, 0.55);
+  border-color: rgba(27, 46, 36, 0.45);
 }
 
 .loadout-browser-card.active {
-  background-color: #ffffff;
-  border-color: var(--color-secondary);
-  box-shadow: 0 0 0 1px var(--color-secondary), 0 2px 6px rgba(27, 46, 36, 0.08);
+  background-color: #fffaf2;
+  border-color: #d9531e;
+  box-shadow: 0 2px 8px rgba(217, 83, 30, 0.15);
 }
 
 .loadout-card-top {
@@ -2500,19 +2102,19 @@ async function copyLoadoutManifest() {
 
 .loadout-card-season {
   font-weight: 700;
-  color: var(--color-secondary);
+  color: #d9531e;
   letter-spacing: 0.06em;
 }
 
 .loadout-card-temp {
-  color: var(--color-lichen-slate);
-  font-weight: 600;
+  color: #3f4d44;
+  font-weight: 700;
 }
 
 .loadout-card-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--color-primary);
+  color: #111f18;
   line-height: 1.2;
   width: 100%;
   white-space: nowrap;
@@ -2523,32 +2125,160 @@ async function copyLoadoutManifest() {
 .loadout-card-meta {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 4px;
-  font-size: 8.5px;
-  color: var(--color-on-surface-variant);
-  white-space: nowrap;
+  gap: 5px;
+  font-size: 9.5px;
+  color: #3f4d44;
 }
 
-.loadout-dispatches-box {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background-color: rgba(27, 46, 36, 0.04);
-  border: 1px solid rgba(115, 120, 116, 0.25);
+.loadout-card-meta strong {
+  color: #111f18;
+}
+
+/* HIGH-CONTRAST DARK PINE ACTIVE LOADOUT HERO BANNER */
+.manifest-hero-card {
+  background: linear-gradient(145deg, #1b2e24 0%, #13221a 100%);
+  color: #ffffff;
+  border: 1.5px solid #0f1c15;
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 18px rgba(19, 34, 26, 0.18);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
 }
 
-.loadout-dispatches-header {
+.manifest-top-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.manifest-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.manifest-kicker {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
+  font-size: 9.5px;
+  color: #c6d1c9;
+  letter-spacing: 0.05em;
+}
+
+.kicker-season-badge {
+  background-color: #d9531e;
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.kicker-sep {
+  opacity: 0.5;
+}
+
+.manifest-title {
+  font-size: 21px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.copy-manifest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.copy-manifest-btn:hover {
+  background-color: #d9531e;
+  border-color: #d9531e;
+  color: #ffffff;
+}
+
+.manifest-stats-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background-color: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 10px 8px;
+}
+
+.manifest-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.manifest-stat-item .stat-label {
+  font-size: 8.5px;
+  color: #b4c2b8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manifest-stat-item .stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.manifest-stat-item .stat-value small {
+  font-size: 9px;
+  color: #ff8552;
+  margin-left: 2px;
+}
+
+.manifest-stat-item .stat-value.accent {
+  color: #ff8552;
+}
+
+.manifest-stat-sep {
+  width: 1px;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.manifest-dispatches-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.dispatches-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--color-lichen-slate);
+  color: #c6d1c9;
 }
 
 .loadout-dispatches-links {
@@ -2561,19 +2291,343 @@ async function copyLoadoutManifest() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 4px;
-  background-color: #ffffff;
-  border: 1px solid rgba(115, 120, 116, 0.3);
-  color: var(--color-primary);
-  font-size: 12px;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  font-size: 11.5px;
   font-weight: 500;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
 .loadout-dispatch-link:hover {
-  border-color: var(--color-secondary);
+  background-color: #d9531e;
+  border-color: #d9531e;
+  color: #ffffff;
+}
+
+/* ========================================================================= */
+/* HIGH-CONTRAST CATEGORY SECTIONS & SCANNABLE GEAR ITEM ROWS                */
+/* ========================================================================= */
+.kits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.kit-category-section {
+  background-color: #ffffff;
+  border: 1.5px solid rgba(27, 46, 36, 0.24);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 3px 12px rgba(27, 46, 36, 0.07);
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 16px;
+  background-color: #1b2e24;
+  color: #ffffff;
+  border-bottom: 2px solid #d9531e;
+}
+
+.category-header-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.category-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: #ff7a45;
+  box-shadow: 0 0 6px rgba(255, 122, 69, 0.65);
+}
+
+.category-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #ffffff;
+  margin: 0;
+}
+
+.category-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-weight-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.category-item-count {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #c6d1c9;
+}
+
+.items-table {
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.gear-item-row {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(27, 46, 36, 0.12);
+  background-color: #ffffff;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.gear-item-row:last-child {
+  border-bottom: none;
+}
+
+.gear-item-row.is-interactive {
+  cursor: pointer;
+}
+
+.gear-item-row.is-interactive:hover {
+  background-color: #faf6ee;
+}
+
+.gear-item-row.is-expanded {
+  background-color: #fcf9f2;
+  box-shadow: inset 3.5px 0 0 #d9531e;
+}
+
+.gear-item-row.gear-item-highlighted {
+  background-color: rgba(217, 83, 30, 0.12);
+  box-shadow: inset 4px 0 0 #d9531e;
+}
+
+.gear-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+}
+
+.item-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.item-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.item-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111f18;
+  line-height: 1.25;
+}
+
+.item-spec {
+  font-size: 11px;
+  color: #46534b;
+  line-height: 1.35;
+}
+
+.item-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.review-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background-color: rgba(217, 83, 30, 0.1);
+  border: 1px solid rgba(217, 83, 30, 0.35);
+  color: #c24414;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.review-quick-btn:hover {
+  background-color: #d9531e;
+  border-color: #d9531e;
+  color: #ffffff;
+}
+
+.item-weight {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #111f18;
+  white-space: nowrap;
+  background-color: #eef1ee;
+  border: 1px solid rgba(27, 46, 36, 0.22);
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-width: 54px;
+  text-align: center;
+}
+
+.row-expand-chevron {
+  font-size: 18px;
+  color: #5c6960;
+  transition: transform 0.18s ease, color 0.15s ease;
+}
+
+.gear-item-row:hover .row-expand-chevron {
+  color: #111f18;
+}
+
+.row-expand-chevron.rotated {
+  transform: rotate(180deg);
+  color: #d9531e;
+}
+
+/* PROGRESSIVE DISCLOSURE DRAWER INSIDE EXPANDED ROW */
+.item-expanded-drawer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(27, 46, 36, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: default;
+}
+
+.item-note {
+  font-size: 13px;
+  color: #26332b;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2.5px solid rgba(27, 46, 36, 0.3);
+}
+
+.expanded-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.expanded-meta-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #46534b;
+  margin-right: 2px;
+}
+
+.status-chip {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.status-chip.packed {
+  background-color: rgba(4, 120, 87, 0.12);
+  color: #046c4e;
+  border: 1px solid rgba(4, 120, 87, 0.32);
+}
+
+.status-chip.essential {
+  background-color: rgba(217, 83, 30, 0.14);
+  color: #c24414;
+  border: 1px solid rgba(217, 83, 30, 0.38);
+}
+
+.status-chip.worn,
+.status-chip.ready {
+  background-color: rgba(27, 46, 36, 0.1);
+  color: #1b2e24;
+  border: 1px solid rgba(27, 46, 36, 0.28);
+}
+
+.linked-review-pill,
+.linked-loadout-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid rgba(27, 46, 36, 0.28);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: #111f18;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.linked-review-pill:hover,
+.linked-loadout-chip:hover {
+  border-color: #d9531e;
+  background: rgba(217, 83, 30, 0.08);
+  color: #c24414;
+}
+
+.pill-topic {
+  font-weight: 700;
+  color: #d9531e;
+  flex-shrink: 0;
+}
+
+.pill-sep {
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.pill-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.icon-xs {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.text-success {
+  color: #047857;
+}
+
+.text-secondary {
   color: var(--color-secondary);
 }
 </style>

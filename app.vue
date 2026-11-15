@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { watch } from 'vue'
+
 export interface ActiveInspection {
   dispatchId: string
   slug: string
@@ -6,14 +8,24 @@ export interface ActiveInspection {
   locationsCount?: number
 }
 
+const route = useRoute()
 const activeInspection = useState<ActiveInspection | null>('activeDispatchInspection', () => null)
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (route.path !== '/' || (!route.query.dispatch && !route.query.story)) {
+      activeInspection.value = null
+    }
+  }
+)
 </script>
 
 <template>
   <div class="nordic-mobile-viewport">
     <!-- Top Center Brand Notch (Apple-style attached notch) -->
     <ClientOnly>
-      <div v-if="activeInspection" class="brand-notch inspection font-mono">
+      <div v-if="activeInspection && route.path === '/'" class="brand-notch inspection font-mono">
         <span class="notch-beacon" />
         <span class="notch-title inspection-label">DISPATCH INSPECTION</span>
       </div>

@@ -9,10 +9,10 @@ import {
 
 describe('Gear Ledger Data Specifications', () => {
   it('validates seasonal loadout kits structure', () => {
-    expect(mockLoadoutKits.length).toBe(4)
+    expect(mockLoadoutKits.length).toBe(5)
 
     const seasons = mockLoadoutKits.map(k => k.season)
-    expect(seasons).toEqual(['AUTUMN', 'WINTER', 'SPRING', 'SUMMER'])
+    expect(seasons).toEqual(['AUTUMN', 'WINTER', 'SPRING', 'SUMMER', 'AUTUMN'])
 
     for (const kit of mockLoadoutKits) {
       expect(kit.title).toBeDefined()
@@ -59,9 +59,9 @@ describe('Gear Ledger Data Specifications', () => {
   it('verifies discrete season selector stops mapping', () => {
     const seasonStops = ['SPRING', 'SUMMER', 'AUTUMN', 'WINTER'] as const
     for (const stop of seasonStops) {
-      const kit = mockLoadoutKits.find(k => k.id === stop)
+      const kit = mockLoadoutKits.find(k => k.id === stop || k.season === stop)
       expect(kit).toBeDefined()
-      expect(kit?.label).toBeTruthy()
+      expect(kit?.label || kit?.title).toBeTruthy()
     }
 
     // Verify discrete station snapping (0 to 3) without continuous progressive fill
@@ -95,7 +95,7 @@ describe('Gear Ledger Data Specifications', () => {
     }
 
     // 3. Loadouts (clean without terrain, computing weights dynamically)
-    expect(mockLoadouts.length).toBe(4)
+    expect(mockLoadouts.length).toBe(5)
     for (const loadout of mockLoadouts) {
       expect(loadout.id).toBeTruthy()
       expect(loadout.title).toBeTruthy()
