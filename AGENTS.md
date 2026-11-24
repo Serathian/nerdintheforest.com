@@ -23,3 +23,19 @@ Operational guidelines and contracts for AI agents working in `nerdintheforest.c
 2. **Coordinate Standard**: Coordinates in GeoJSON LineStrings and MapLibre standard are `[longitude, latitude]` (or `[lng, lat, ele]`). Never invert lat and lng.
 3. **Dispatch Inspection Mode**: The active dispatch inspection state in `useState('activeDispatchInspection')` coordinates map zooming, elevation profile contours, and the dispatch reader drawer. Keep state cleanup in route watchers.
 4. **CI/CD Compliance**: Every commit pushed to `main` triggers `.github/workflows/docker-publish.yml` to build the Docker image and trigger Watchtower on the droplet.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked centrally in GitHub Issues (`Serathian/website-stack` via `gh --repo Serathian/website-stack`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses the default five-role triage label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout (`GLOSSARY.md` + `docs/adr/` at the repo root). See `docs/agents/domain.md`.
