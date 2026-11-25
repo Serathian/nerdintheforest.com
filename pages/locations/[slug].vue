@@ -478,7 +478,6 @@ useHead({
     <!-- Toast Notification -->
     <Transition name="fade">
       <div v-if="shareNotification" class="toast-notification font-mono">
-        <span class="toast-dot">●</span>
         {{ shareNotification }}
       </div>
     </Transition>
@@ -1406,11 +1405,6 @@ useHead({
   font-size: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(217, 83, 30, 0.4);
-}
-
-.toast-dot {
-  color: var(--color-secondary, #d9531e);
-  margin-right: 6px;
 }
 
 .fade-enter-active,

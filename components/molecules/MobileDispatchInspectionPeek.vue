@@ -367,42 +367,6 @@ function getCategoryIcon(cat?: string): string {
   gap: 6px;
 }
 
-.inspection-beacon-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background-color: rgba(217, 83, 30, 0.12);
-  color: var(--color-secondary, #d9531e);
-  border: 1px solid rgba(217, 83, 30, 0.4);
-  border-radius: 4px;
-  padding: 3px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.beacon-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary, #d9531e);
-  animation: beacon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes beacon-pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.3;
-    transform: scale(0.85);
-  }
-}
-
 .date-badge,
 .weather-badge {
   background-color: var(--color-surface-container, #f3ede1);

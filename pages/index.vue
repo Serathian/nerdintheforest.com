@@ -893,7 +893,6 @@ function showNotification(msg: string) {
       <!-- Live Toast Notification Banner -->
       <Transition name="fade">
         <div v-if="notificationMessage" class="toast-notification font-mono">
-          <span class="toast-dot">●</span>
           {{ notificationMessage }}
         </div>
       </Transition>
@@ -962,12 +961,6 @@ function showNotification(msg: string) {
   border: 1px solid rgba(217, 83, 30, 0.4);
   font-size: 11px;
   font-weight: 500;
-}
-
-.toast-dot {
-  color: var(--color-secondary);
-  font-weight: 700;
-  margin-right: 4px;
 }
 
 .fade-enter-active,

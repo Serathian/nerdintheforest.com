@@ -473,7 +473,6 @@ async function copyLoadoutManifest() {
       <!-- Section Header -->
       <header class="gear-header">
         <div class="header-pre font-mono">
-          <span class="header-beacon" />
           <span>EQUIPMENT // TELEMETRY & FIELD LOGS</span>
         </div>
         <h1 class="gear-title font-serif">Gear Ledger</h1>
@@ -850,7 +849,6 @@ async function copyLoadoutManifest() {
             >
               <div class="category-header font-mono">
                 <div class="category-header-left">
-                  <span class="category-indicator" />
                   <h3 class="category-title">{{ cat.name }}</h3>
                 </div>
                 <div class="category-header-right">
@@ -1133,7 +1131,6 @@ async function copyLoadoutManifest() {
             >
               <div class="category-header font-mono">
                 <div class="category-header-left">
-                  <span class="category-indicator" />
                   <h3 class="category-title">{{ cat.name }}</h3>
                 </div>
                 <div class="category-header-right">
@@ -1279,14 +1276,6 @@ async function copyLoadoutManifest() {
   color: var(--color-secondary);
   font-weight: 700;
   margin-bottom: 6px;
-}
-
-.header-beacon {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-  box-shadow: 0 0 6px rgba(217, 83, 30, 0.6);
 }
 
 .gear-title {
@@ -2389,14 +2378,6 @@ async function copyLoadoutManifest() {
   display: flex;
   align-items: center;
   gap: 9px;
-}
-
-.category-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 9999px;
-  background-color: #ff7a45;
-  box-shadow: 0 0 6px rgba(255, 122, 69, 0.65);
 }
 
 .category-title {

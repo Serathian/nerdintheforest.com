@@ -27,7 +27,6 @@ const emit = defineEmits<{
     ]"
     @click="interactive ? emit('click') : undefined"
   >
-    <span v-if="active" class="active-dot" />
     <span class="chip-label">{{ label }}</span>
   </button>
 </template>
@@ -64,15 +63,6 @@ const emit = defineEmits<{
   background-color: var(--color-pine-primary);
   border-color: var(--color-pine-primary);
   color: #ffffff;
-}
-
-.active-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-pill);
-  background-color: var(--color-beacon-secondary);
-  display: inline-block;
-  flex-shrink: 0;
 }
 
 /* Variant Accents */

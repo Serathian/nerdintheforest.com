@@ -65,7 +65,6 @@ const telemetry = computed(() =>
       <!-- Page Header & Personal Intro -->
       <header class="ethos-header">
         <div class="header-pre font-mono">
-          <span class="header-beacon" />
           <span>NERD IN THE FOREST // FIELD ETHOS</span>
         </div>
 
@@ -170,7 +169,6 @@ const telemetry = computed(() =>
 
       <!-- Footer -->
       <footer class="ethos-footer font-mono">
-        <span class="footer-dot" aria-hidden="true">●</span>
         <span>NERD IN THE FOREST // NORDIC FIELD ATLAS</span>
       </footer>
     </div>
@@ -205,13 +203,6 @@ const telemetry = computed(() =>
   color: var(--color-secondary);
   font-weight: 700;
   margin-bottom: 6px;
-}
-
-.header-beacon {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
 }
 
 .ethos-title {
@@ -475,10 +466,5 @@ const telemetry = computed(() =>
   letter-spacing: 0.08em;
   color: var(--color-outline);
   padding: 12px 0;
-}
-
-.footer-dot {
-  font-size: 6px;
-  color: var(--color-secondary);
 }
 </style>

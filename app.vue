@@ -40,18 +40,15 @@ watch(
     <!-- Top Center Brand Notch (Apple-style attached notch) -->
     <ClientOnly>
       <div v-if="activeInspection && route.path === '/'" class="brand-notch inspection font-mono">
-        <span class="notch-beacon" />
         <span class="notch-title inspection-label">DISPATCH INSPECTION</span>
       </div>
       <div v-else class="brand-notch font-mono">
-        <span class="notch-dot" />
         <span class="notch-title">Nerd in the Forest</span>
         <span class="notch-sep">//</span>
         <span class="notch-subtitle">Adventure Atlas</span>
       </div>
       <template #fallback>
         <div class="brand-notch font-mono">
-          <span class="notch-dot" />
           <span class="notch-title">Nerd in the Forest</span>
           <span class="notch-sep">//</span>
           <span class="notch-subtitle">Adventure Atlas</span>
@@ -107,14 +104,6 @@ watch(
   pointer-events: auto;
 }
 
-.notch-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-  flex-shrink: 0;
-}
-
 .notch-title {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -145,21 +134,6 @@ watch(
 
 .brand-notch.inspection {
   background-color: rgba(254, 249, 237, 0.98);
-}
-
-.notch-beacon {
-  width: 7px;
-  height: 7px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-  box-shadow: 0 0 8px rgba(217, 83, 30, 0.7);
-  flex-shrink: 0;
-  animation: beacon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes beacon-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
 .inspection-label {

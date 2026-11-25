@@ -177,7 +177,6 @@ function handleApply() {
           <!-- 1. Quick Search / Category Pills -->
           <section class="filter-section">
             <div class="section-header font-mono">
-              <span class="section-dot" />
               <span class="section-title">Waypoint Category</span>
               <span class="section-line" />
             </div>
@@ -194,10 +193,6 @@ function handleApply() {
                 @click="localCategory = cat.id"
               >
                 <span
-                  v-if="localCategory === cat.id"
-                  class="active-dot"
-                />
-                <span
                   class="material-symbols-outlined text-[14px]"
                   :class="localCategory === cat.id ? 'text-secondary' : 'text-lichen-slate'"
                 >
@@ -211,7 +206,6 @@ function handleApply() {
           <!-- 2. Expedition Area (Regional Wilderness Territory) -->
           <section class="filter-section">
             <div class="section-header font-mono">
-              <span class="section-dot" />
               <span class="section-title">Expedition Area</span>
               <span class="section-line" />
             </div>
@@ -227,10 +221,6 @@ function handleApply() {
                 type="button"
                 @click="localArea = area.id"
               >
-                <span
-                  v-if="localArea === area.id"
-                  class="active-dot"
-                />
                 <span
                   class="material-symbols-outlined text-[14px]"
                   :class="localArea === area.id ? 'text-secondary' : 'text-lichen-slate'"
@@ -251,7 +241,6 @@ function handleApply() {
           <!-- 3. Visit Status (Refined Segmented Ledger Rail) -->
           <section class="filter-section">
             <div class="section-header font-mono">
-              <span class="section-dot" />
               <span class="section-title">Expedition Visit Status</span>
               <span class="section-line" />
             </div>
@@ -281,7 +270,6 @@ function handleApply() {
           <!-- 3. Maximum Distance Radius (Calibrated Range Strip) -->
           <section class="filter-section">
             <div class="section-header font-mono">
-              <span class="section-dot" />
               <span class="section-title">Approach Radius</span>
               <span class="section-line" />
             </div>
@@ -305,7 +293,6 @@ function handleApply() {
           <!-- 4. Required Provisions & Amenities -->
           <section class="filter-section">
             <div class="section-header font-mono">
-              <span class="section-dot" />
               <span class="section-title">Required Provisions & Amenities</span>
               <span class="section-line" />
             </div>
@@ -322,10 +309,6 @@ function handleApply() {
                 @click="toggleAmenity(amenity.id)"
               >
                 <div class="w-full flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span
-                    v-if="localAmenities.includes(amenity.id)"
-                    class="active-dot shrink-0"
-                  />
                   <span
                     class="material-symbols-outlined text-[15px] shrink-0"
                     :class="localAmenities.includes(amenity.id) ? 'text-secondary' : 'text-lichen-slate'"
@@ -499,14 +482,6 @@ function handleApply() {
   font-weight: 600;
 }
 
-.section-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
-  opacity: 0.85;
-}
-
 .section-line {
   flex: 1;
   height: 1px;
@@ -543,13 +518,6 @@ function handleApply() {
   border-color: var(--color-primary);
   box-shadow: 0 2px 6px rgba(27, 46, 36, 0.18);
   font-weight: 600;
-}
-
-.active-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
 }
 
 .area-badge-chip {

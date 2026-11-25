@@ -154,7 +154,6 @@ function openDispatch(dispatch: { slug: string; id: string }) {
       <!-- Section Header -->
       <header class="ledger-header">
         <div class="header-pre font-mono">
-          <span class="header-beacon" />
           <span>EXPEDITION ARCHIVE // {{ primaryArchiveAreaLabel }}</span>
         </div>
         <h1 class="ledger-title font-serif">Field Ledger</h1>
@@ -311,13 +310,6 @@ function openDispatch(dispatch: { slug: string; id: string }) {
   color: var(--color-secondary);
   font-weight: 700;
   margin-bottom: 6px;
-}
-
-.header-beacon {
-  width: 6px;
-  height: 6px;
-  border-radius: 9999px;
-  background-color: var(--color-secondary);
 }
 
 .ledger-title {
